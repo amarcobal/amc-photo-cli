@@ -16,7 +16,12 @@ public class ToolOptions
 	internal const string PhotoFormatInvalidFolderNameDefault = "invalid-photo-format";
 	internal const string NoPhotoTakenDateFolderNameDefault = "no-photo-taken-date";
 	internal const string NoAddressFolderNameDefault = "no-address";
+	internal const string NoAuthorFolderNameDefault = "no-author";
+	internal const string NoDeviceFolderNameDefault = "no-device";
 	internal const string NoAddressAndPhotoTakenDateFolderNameDefault = "no-address-and-no-photo-taken-date";
+	internal const string NoAuthorAndPhotoTakenDateFolderNameDefault = "no-author-and-no-photo-taken-date";
+	internal const string NoDeviceAndPhotoTakenDateFolderNameDefault = "no-device-and-no-photo-taken-date";
+	internal const string NoAuthorAndDeviceAndPhotoTakenDateFolderNameDefault = "no-author-and-no-device-and-no-photo-taken-date";
 	internal const string PhotoOrganizerReportCsvDefault = "photo-cli-report.csv";
 	internal const string DryRunCsvReportFileNameDefault = "photo-cli-dry-run.csv";
 	internal const string ArchivePhotoTakenDateHashSeparatorDefault = "-";
@@ -42,7 +47,12 @@ public class ToolOptions
 		PhotoFormatInvalidFolderName = options.PhotoFormatInvalidFolderName ?? PhotoFormatInvalidFolderNameDefault;
 		NoPhotoTakenDateFolderName = options.NoPhotoTakenDateFolderName ?? NoPhotoTakenDateFolderNameDefault;
 		NoAddressFolderName = options.NoAddressFolderName ?? NoAddressFolderNameDefault;
+		NoAuthorFolderName = options.NoAuthorFolderName ?? NoAuthorFolderNameDefault;
+		NoDeviceFolderName = options.NoDeviceFolderName ?? NoDeviceFolderNameDefault;
 		NoAddressAndPhotoTakenDateFolderName = options.NoAddressAndPhotoTakenDateFolderName ?? NoAddressAndPhotoTakenDateFolderNameDefault;
+		NoAuthorAndPhotoTakenDateFolderName = options.NoAuthorAndPhotoTakenDateFolderName ?? NoAuthorAndPhotoTakenDateFolderNameDefault;
+		NoDeviceAndPhotoTakenDateFolderName = options.NoDeviceAndPhotoTakenDateFolderName ?? NoDeviceAndPhotoTakenDateFolderNameDefault;
+		NoAuthorAndDeviceAndPhotoTakenDateFolderName = options.NoAuthorAndDeviceAndPhotoTakenDateFolderName ?? NoAuthorAndDeviceAndPhotoTakenDateFolderNameDefault;
 		CsvReportFileName = options.CsvReportFileName ?? PhotoOrganizerReportCsvDefault;
 		DryRunCsvReportFileName = options.DryRunCsvReportFileName ?? DryRunCsvReportFileNameDefault;
 		ConnectionLimit = options.ConnectionLimit ?? ConnectionLimitDefault;
@@ -71,7 +81,12 @@ public class ToolOptions
 	public string PhotoFormatInvalidFolderName { get; set; }
 	public string NoPhotoTakenDateFolderName { get; set; }
 	public string NoAddressFolderName { get; set; }
+	public string NoAuthorFolderName { get; set; }
+	public string NoDeviceFolderName { get; set; }
 	public string NoAddressAndPhotoTakenDateFolderName { get; set; }
+	public string NoAuthorAndPhotoTakenDateFolderName { get; set; }
+	public string NoDeviceAndPhotoTakenDateFolderName { get; set; }
+	public string NoAuthorAndDeviceAndPhotoTakenDateFolderName { get; set; }
 
 	public string CsvReportFileName { get; set; }
 	public string DryRunCsvReportFileName { get; set; }

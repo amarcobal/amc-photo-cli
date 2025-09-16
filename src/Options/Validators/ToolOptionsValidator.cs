@@ -23,7 +23,12 @@ public class ToolOptionsValidator : AbstractValidator<ToolOptions>
 		RuleFor(r => r.PhotoFormatInvalidFolderName).RequiredString();
 		RuleFor(r => r.NoPhotoTakenDateFolderName).RequiredString();
 		RuleFor(r => r.NoAddressFolderName).RequiredString();
+		RuleFor(r => r.NoAuthorFolderName).RequiredString();
+		RuleFor(r => r.NoDeviceFolderName).RequiredString();
 		RuleFor(r => r.NoAddressAndPhotoTakenDateFolderName).RequiredString();
+		RuleFor(r => r.NoAuthorAndPhotoTakenDateFolderName).RequiredString();
+		RuleFor(r => r.NoDeviceAndPhotoTakenDateFolderName).RequiredString();
+		RuleFor(r => r.NoAuthorAndDeviceAndPhotoTakenDateFolderName).RequiredString();
 
 		RuleFor(r => r.CsvReportFileName).RequiredString().Matches(Constants.CsvExtensionRegex);
 		RuleFor(r => r.DryRunCsvReportFileName).RequiredString().Matches(Constants.CsvExtensionRegex);

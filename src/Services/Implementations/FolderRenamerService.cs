@@ -10,7 +10,7 @@ public class FolderRenamerService : IFolderRenamerService
 	{
 		_options = options;
 		_logger = logger;
-		_ignoredFolders = new List<string> { _options.NoAddressFolderName, _options.NoPhotoTakenDateFolderName, _options.NoAddressAndPhotoTakenDateFolderName };
+		_ignoredFolders = new List<string> { _options.NoAddressFolderName, _options.NoPhotoTakenDateFolderName, _options.NoAddressAndPhotoTakenDateFolderName, _options.NoAuthorFolderName, _options.NoDeviceFolderName, _options.NoAuthorAndDeviceAndPhotoTakenDateFolderName };
 	}
 
 	public IReadOnlyCollection<Photo> RenameByFolderAppendType(IReadOnlyCollection<Photo> orderedPhotos, FolderAppendType folderAppendType, FolderAppendLocationType folderAppendLocationType,

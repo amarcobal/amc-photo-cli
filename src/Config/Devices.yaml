@@ -1,0 +1,44 @@
+Devices:
+  - ID: PG9A
+    Name: "Panasonic Lumix G9 A"
+    Alias: "PG9A"
+    Make: "Panasonic"
+    Model: "DC-G9"
+    Serialnumber: "XHR2011210144"
+
+  - ID: PG9B
+    Name: "Panasonic Lumix G9 B"
+    Alias: "PG9B"
+    Make: "Panasonic"
+    Model: "DC-G9"
+    Serialnumber: "XHL2103080001"
+
+  - ID: XMI10
+    Name: "Xiaomi Mi 10"
+    Alias: "XMI10"
+    Make: "Xiaomi"
+    Model: "Mi 10"
+    Serialnumber: null
+
+  - ID: XMI12
+    Name: "Xiaomi Mi 12"
+    Alias: "XMI12"
+    Make: "Xiaomi"
+    Model: "Mi 12"
+    Serialnumber: null
+
+  - ID: PXL8P
+    Name: "Google Pixel 8 Pro"
+    Alias: "PXL8P"
+    Make: "Google"
+    Model: "Pixel 8 Pro"
+    Serialnumber: null
+
+  # Device genérico por defecto
+  - ID: Unknown
+    Name: "Unknown Device"
+    Alias: "UNK"
+    Make: "3rdParty"
+    Model: "Unknown"
+    Serialnumber: null
+

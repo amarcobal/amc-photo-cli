@@ -1,4 +1,4 @@
-﻿#region Global using
+#region Global using
 
 global using System.Globalization;
 global using System.Net;
@@ -269,6 +269,7 @@ public static class Program
 			services.AddTransient<IExifOrganizerService, ExifOrganizerService>();
 			services.AddTransient<IExifDataGrouperService, ExifDataGrouperService>();
 			services.AddTransient<IFolderRenamerService, FolderRenamerService>();
+			services.AddTransient<IMediaIdentityService, MediaIdentityService>();
 			services.AddTransient<IReverseGeocodeService, ReverseGeocodeService>();
 			services.AddTransient<IReverseGeocodeFetcherService, ReverseGeocodeFetcherService>();
 			services.AddTransient<IValidator<ToolOptions>, ToolOptionsValidator>();

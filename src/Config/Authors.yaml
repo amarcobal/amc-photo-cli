@@ -1,0 +1,31 @@
+Authors:
+  - ID: Adrian
+    Name: "Adrián Marcobal"
+    Alias: "AMC"
+    Devices:
+      - ID: PXL8P
+        From: "2023-10-01"
+        To: null
+      - ID: PG9A
+        From: "2020-10-01"
+        To: null
+      - ID: PG9B
+        From: "2020-10-01"
+        To: null
+
+  - ID: Laura
+    Name: "Laura Cortés"
+    Alias: "LCC"
+    Devices:
+      - ID: XMI12
+        From: "2022-10-01"
+        To: null
+
+  # Author genérico por defecto
+  - ID: Unknown
+    Name: "Unknown Author"
+    Alias: "UNKN"
+    Devices:
+      - ID: Unknown
+        From: null
+        To: null

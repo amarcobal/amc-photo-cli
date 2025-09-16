@@ -19,7 +19,12 @@ public class ToolOptionsRaw
 	public string? PhotoFormatInvalidFolderName { get; set; }
 	public string? NoPhotoTakenDateFolderName { get; set; }
 	public string? NoAddressFolderName { get; set; }
+	public string? NoAuthorFolderName { get; set; }
+	public string? NoDeviceFolderName { get; set; }
 	public string? NoAddressAndPhotoTakenDateFolderName { get; set; }
+	public string? NoAuthorAndPhotoTakenDateFolderName { get; set; }
+	public string? NoDeviceAndPhotoTakenDateFolderName { get; set; }
+	public string? NoAuthorAndDeviceAndPhotoTakenDateFolderName { get; set; }
 
 	public string? CsvReportFileName { get; set; }
 	public string? DryRunCsvReportFileName { get; set; }
