@@ -14,4 +14,7 @@ public enum NamingStyle : byte
 	AddressDay = 9,
 	AddressDateTimeWithMinutes = 10,
 	AddressDateTimeWithSeconds = 11,
+	DateTimeWithSubseconds = 12,
+	DateTimeWithSubsecondsAuthorDevice = 13,
+	DateTimeWithSubsecondsAuthorDeviceOriginalName = 14
 }

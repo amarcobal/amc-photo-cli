@@ -52,6 +52,32 @@ public class DirectoryGrouperService : IDirectoryGrouperService
 			{
 				targetRelativeDirectoryPath = $"{exifData.TakenDate.Value.ToString(_options.YearFormat)}{Path.DirectorySeparatorChar}{exifData.TakenDate.Value.ToString(_options.MonthFormat)}{Path.DirectorySeparatorChar}{exifData.TakenDate.Value.ToString(_options.DayFormat)}";
 			}
+			else if (exifData?.TakenDate != null && groupByFolderType is GroupByFolderType.DecadeYearYearShortMonthNameYearMonthDay)
+			{
+				var taken = exifData.TakenDate.Value;
+
+				// Decade
+				var decade = $"{taken.Year / 10 * 10}s"; // 2025 -> "2020s"
+
+				// Year
+				var year = taken.ToString(_options.YearFormat); // "2025"
+
+				// Month
+				var month = taken.ToString(_options.MonthFormat);
+				var shortMonthName = $"{taken:MMM}";
+
+				// Day
+				var day = taken.ToString(_options.DayFormat);
+
+				//Event
+				//var eventOrAlbum = photo.EventName ?? string.Empty; // <-- dinámico
+				var eventDate = $"{taken:yyyy-MM}";
+				var eventName = "Moments";
+				var fullEvent = $"{eventDate}" + (string.IsNullOrWhiteSpace(eventName) ? $"{eventDate} {eventName}" : string.Empty);
+
+				targetRelativeDirectoryPath = $"{decade}{Path.DirectorySeparatorChar}{year}{Path.DirectorySeparatorChar}{year}-{month}-{shortMonthName}{Path.DirectorySeparatorChar}{fullEvent}";
+			}
+
 			else if (folderProcessType is FolderProcessType.Single)
 			{
 				if (sourcePathTrimmed != directory)

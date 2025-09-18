@@ -8,4 +8,6 @@ public enum GroupByFolderType : byte
 	Year = 3,
 	AddressFlat = 4,
 	AddressHierarchy = 5,
+	///<summary>{Decade}s/{Year}/{Year}{Month}{ShortMonthName}/{Year}-{Month}-{Day} {EventName}</summary>
+	DecadeYearYearShortMonthNameYearMonthDay = 10,
 }

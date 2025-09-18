@@ -54,7 +54,7 @@ public class ArchiveRunner : BaseRunner, IConsoleRunner
 		var isNoPhotoTakenDatePreventProcessOptionSelected = _options.NoPhotoTakenDateAction == ArchiveNoPhotoTakenDateAction.PreventProcess;
 		var isNoCoordinatePreventProcessOptionSelected = _options.NoCoordinateAction == ArchiveNoCoordinateAction.PreventProcess;
 
-		var photosWithExif = _exifDataAppenderService.ExtractExifData(photosFound, out var allPhotosAreValid, out var allPhotosHasPhotoTaken, out var allPhotosHasCoordinate);
+		var photosWithExif = _exifDataAppenderService.ExtractExifData(photosFound, out var allPhotosAreValid, out var allPhotosHasPhotoTaken, out var allPhotosHasCoordinate, out var allPhotosHasMakeModel, out var allPhotosHasSubseconds, out var allPhotosHasOriginalFileName);
 
 		if (!NoExifDataPreventActions(out var exitCodeNoExif, allPhotosAreValid, allPhotosHasPhotoTaken, allPhotosHasCoordinate, isInvalidFileFormatPreventProcessOptionSelected,
 			    isNoPhotoTakenDatePreventProcessOptionSelected, isNoCoordinatePreventProcessOptionSelected, photosWithExif))

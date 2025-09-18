@@ -44,7 +44,7 @@ public class InfoRunner : BaseRunner, IConsoleRunner
 		var isNoCoordinatePreventProcessOptionSelected = _options.NoCoordinateAction == InfoNoCoordinateAction.PreventProcess;
 		var isInvalidFileFormatPreventProcessOptionSelected = _options.InvalidFileFormatAction == InfoInvalidFormatAction.PreventProcess;
 
-		var photos = _exifDataAppenderService.ExtractExifData(photoPaths, out var allPhotosAreValid, out var allPhotosHasPhotoTaken, out var allPhotosHasCoordinate);
+		var photos = _exifDataAppenderService.ExtractExifData(photoPaths, out var allPhotosAreValid, out var allPhotosHasPhotoTaken, out var allPhotosHasCoordinate, out var allPhotosHasMakeModel, out var allPhotosHasSubseconds, out var allPhotosHasOriginalFileName);
 		if (!NoExifDataPreventActions(out var exitCodeNoExif, allPhotosAreValid, allPhotosHasPhotoTaken, allPhotosHasCoordinate,
 			    isInvalidFileFormatPreventProcessOptionSelected, isNoPhotoTakenDatePreventProcessOptionSelected, isNoCoordinatePreventProcessOptionSelected, photos))
 		{

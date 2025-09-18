@@ -331,7 +331,7 @@ public class ExifDataAppenderServiceUnitTests
 		var exifParseServiceMock = new Mock<IExifParserService>(MockBehavior.Strict);
 		foreach (var (photo, exifData) in exifDataByPhoto)
 		{
-			exifParseServiceMock.Setup(e => e.Parse(photo.PhotoFile.SourcePath, It.IsAny<bool>(), It.IsAny<bool>())).Returns(exifData);
+			exifParseServiceMock.Setup(e => e.Parse(photo.PhotoFile.SourcePath, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>())).Returns(exifData);
 			inputPhotos.Add(photo);
 		}
 

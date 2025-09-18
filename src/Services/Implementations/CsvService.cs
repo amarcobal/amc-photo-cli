@@ -41,6 +41,11 @@ public class CsvService : ICsvService
 
 	public async Task CreateInfoReport(IEnumerable<Photo> photos, string outputFile)
 	{
+		var now = DateTime.Now;
+		var fileName = $"{now:yyyy-MM-dd_HH-mm-ss}_photo-info.csv";
+		outputFile = Path.Combine(outputFile, fileName);
+
+
 		_consoleWriter.ProgressStart(ProgressName);
 		var photoCsvModels = new List<PhotoCsv>();
 		foreach (var photo in photos)
@@ -66,6 +71,12 @@ public class CsvService : ICsvService
 	private static PhotoCsv Map(Photo photo, bool mapNewPath)
 	{
 		var takenDate = photo.ExifData?.TakenDate;
+		var subseconds = photo.ExifData?.SubSeconds?.Raw;
+		var make = photo.ExifData?.Make;
+		var model = photo.ExifData?.Model;
+		var originalFileName = photo.ExifData?.OriginalFileName;
+		var author = photo.Author?.Name;
+		var device = photo.Device?.Name;
 		var coordinate = photo.ExifData?.Coordinate;
 		var reverseGeocodes = photo.ExifData?.ReverseGeocodes?.ToList();
 		var newPath = mapNewPath ? photo.PhotoFile.TargetRelativePath : null;
@@ -73,7 +84,7 @@ public class CsvService : ICsvService
 		var photoCsv = new PhotoCsv(photo.PhotoFile.SourceFullPath, newPath, takenDate,
 			photo.ExifData?.ReverseGeocodeFormatted, coordinate?.Latitude, coordinate?.Longitude,
 			takenDate?.Year, takenDate?.Month, takenDate?.Day, takenDate?.Hour, takenDate?.Minute,
-			takenDate?.Second, reverseGeocodes?.ElementAtOrDefault(0), reverseGeocodes?.ElementAtOrDefault(1), reverseGeocodes?.ElementAtOrDefault(2),
+			takenDate?.Second, subseconds, author, device, make, model, originalFileName,  reverseGeocodes?.ElementAtOrDefault(0), reverseGeocodes?.ElementAtOrDefault(1), reverseGeocodes?.ElementAtOrDefault(2),
 			reverseGeocodes?.ElementAtOrDefault(3), reverseGeocodes?.ElementAtOrDefault(4), reverseGeocodes?.ElementAtOrDefault(5), reverseGeocodes?.ElementAtOrDefault(6),
 			reverseGeocodes?.ElementAtOrDefault(7), photo.PhotoFile.Sha1Hash);
 

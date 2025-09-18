@@ -1,6 +1,8 @@
 using System.IO.Abstractions;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
+using MetadataExtractor.Formats.Xmp;
+using XmpCore;
 using Directory = MetadataExtractor.Directory;
 
 namespace PhotoCli.Services.Implementations;
@@ -22,7 +24,7 @@ public class ExifParserService : IExifParserService
 		_coordinatePrecision = options.CoordinatePrecision;
 	}
 
-	public ExifData? Parse(string filePath, bool parseDateTime, bool parseCoordinate)
+	public ExifData? Parse(string filePath, bool parseDateTime, bool parseCoordinate, bool parseMakeModel = false, bool parseSubseconds = false, bool parseOriginalFileName = false)
 	{
 		var fileStream = _fileSystem.FileStream.New(filePath, FileMode.Open);
 		IReadOnlyList<Directory> fileDataDirectories;
@@ -54,6 +56,19 @@ public class ExifParserService : IExifParserService
 		if (parseCoordinate)
 			coordinate = ParseCoordinate(fileDataDirectories, filePath);
 
+		string? make = null;
+		string? model = null;
+		if (parseMakeModel)
+			(make, model) = ParseMakeModel(fileDataDirectories, filePath);
+
+		SubSeconds? subSeconds = null;
+		if (parseSubseconds)
+			subSeconds = ParseSubSeconds(fileDataDirectories, filePath);
+
+		string? originalFileName = null;
+		if (parseOriginalFileName)
+			originalFileName = ParseOriginalFileName(fileDataDirectories, filePath);
+
 		if (photoTaken.HasValue && coordinate != null)
 			++_statistics.PhotoThatHasTakenDateAndCoordinate;
 		else if (photoTaken.HasValue)
@@ -63,8 +78,82 @@ public class ExifParserService : IExifParserService
 		else
 			++_statistics.PhotoThatNoCoordinateAndNoTakenDate;
 
-		return new ExifData(photoTaken, coordinate, _options.AddressSeparator);
+		return new ExifData(photoTaken, coordinate, _options.AddressSeparator, make, model, subSeconds, originalFileName);
 	}
+
+	private (string? make, string? model) ParseMakeModel(IEnumerable<Directory> directories, string filePath)
+	{
+		// Primero buscar en SubIfd
+		var subIfd = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault();
+		var make = subIfd?.GetDescription(ExifDirectoryBase.TagMake);
+		var model = subIfd?.GetDescription(ExifDirectoryBase.TagModel);
+
+		// Si no hay en SubIfd, buscar en IFD0
+		if (string.IsNullOrWhiteSpace(make) || string.IsNullOrWhiteSpace(model))
+		{
+			var ifd0 = directories.OfType<ExifIfd0Directory>().FirstOrDefault();
+			if (string.IsNullOrWhiteSpace(make))
+				make = ifd0?.GetDescription(ExifDirectoryBase.TagMake);
+			if (string.IsNullOrWhiteSpace(model))
+				model = ifd0?.GetDescription(ExifDirectoryBase.TagModel);
+		}
+
+		if (string.IsNullOrWhiteSpace(make))
+			_logger.LogWarning("No Make found for {FilePath}", filePath);
+		if (string.IsNullOrWhiteSpace(model))
+			_logger.LogWarning("No Model found for {FilePath}", filePath);
+
+		return (make, model);
+	}
+
+
+	private SubSeconds? ParseSubSeconds(IEnumerable<Directory> directories, string filePath)
+	{
+		// Primero SubIfd
+		var subIfd = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault();
+		var subSecondsValue = subIfd?.GetString(ExifDirectoryBase.TagSubsecondTimeOriginal);
+
+		// Si no hay en SubIfd, buscar en IFD0
+		if (string.IsNullOrWhiteSpace(subSecondsValue))
+		{
+			var ifd0 = directories.OfType<ExifIfd0Directory>().FirstOrDefault();
+			subSecondsValue = ifd0?.GetString(ExifDirectoryBase.TagSubsecondTime);
+		}
+
+		if (!string.IsNullOrWhiteSpace(subSecondsValue))
+			return new SubSeconds(subSecondsValue);
+
+		_logger.LogDebug("No SubSeconds found for {FilePath}", filePath);
+		return null;
+	}
+
+	private string? ParseOriginalFileName(IEnumerable<Directory> directories, string filePath)
+	{
+		string? originalFileName = null;
+
+		// 1️⃣ Intentar leer PreservedFileName desde XMP
+		var xmpDir = directories.OfType<XmpDirectory>().FirstOrDefault();
+		if (xmpDir?.XmpMeta != null)
+		{
+			originalFileName = xmpDir.XmpMeta.GetPropertyString(XmpConstants.NsXmp, "PreservedFileName");
+			if (!string.IsNullOrWhiteSpace(originalFileName))
+			{
+				_logger.LogDebug("Found PreservedFileName in XMP: {FileName} for {FilePath}", originalFileName, filePath);
+				return originalFileName;
+			}
+
+			// 2️⃣ Si no hay PreservedFileName, buscar Title en Dublin Core
+			originalFileName = xmpDir.XmpMeta.GetPropertyString(XmpConstants.NsDC, "title");
+			if (!string.IsNullOrWhiteSpace(originalFileName))
+			{
+				_logger.LogDebug("Found Title in XMP (as fallback): {FileName} for {FilePath}", originalFileName, filePath);
+				return originalFileName;
+			}
+		}
+
+		return originalFileName;
+	}
+
 
 	private Coordinate? ParseCoordinate(IEnumerable<Directory> fileDataDirectories, string filePath)
 	{
