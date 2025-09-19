@@ -45,7 +45,6 @@ public class CsvService : ICsvService
 		var fileName = $"{now:yyyy-MM-dd_HH-mm-ss}_photo-info.csv";
 		outputFile = Path.Combine(outputFile, fileName);
 
-
 		_consoleWriter.ProgressStart(ProgressName);
 		var photoCsvModels = new List<PhotoCsv>();
 		foreach (var photo in photos)

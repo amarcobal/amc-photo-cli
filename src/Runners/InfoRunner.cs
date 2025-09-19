@@ -63,7 +63,12 @@ public class InfoRunner : BaseRunner, IConsoleRunner
 
 	private bool CheckOutputPath(out ExitCode exitCode)
 	{
-		var outputFile = _fileSystem.FileInfo.New(_options.OutputPath);
+		
+		var now = DateTime.Now;
+		var fileName = $"{now:yyyy-MM-dd_HH-mm-ss}_photo-info.csv";
+		var outputFile = _fileSystem.FileInfo.New(Path.Combine(_options.OutputPath, fileName));
+
+
 		if (outputFile.Exists)
 		{
 			_logger.LogCritical("Output file: {Path} is exists", _options.OutputPath);

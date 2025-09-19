@@ -27,7 +27,7 @@
     },
     "AMC - Test - Info": {
       "commandName": "Project",
-      "commandLineArgs": "info -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -o \"C:\\Work\\Photography\\Test\\Photo-cli\\Reports\""
+      "commandLineArgs": "info -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -o \"C:\\Work\\Photography\\Test\\Photo-cli\\Reports\" -a"
     }
   }
 }

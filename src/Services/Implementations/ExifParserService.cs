@@ -157,7 +157,7 @@ public class ExifParserService : IExifParserService
 
 	private Coordinate? ParseCoordinate(IEnumerable<Directory> fileDataDirectories, string filePath)
 	{
-		var gpsDirectory = fileDataDirectories.OfType<GpsDirectory>().SingleOrDefault();
+		var gpsDirectory = fileDataDirectories.OfType<GpsDirectory>().FirstOrDefault();
 		var geoLocation = gpsDirectory?.GetGeoLocation();
 		if (geoLocation != null)
 			return new Coordinate(Math.Round(geoLocation.Latitude, _coordinatePrecision), Math.Round(geoLocation.Longitude, _coordinatePrecision));
@@ -168,7 +168,7 @@ public class ExifParserService : IExifParserService
 	private DateTime? ParseExifSubIfdDirectory(IEnumerable<Directory> fileDataDirectories, string filePath)
 	{
 		_logger.LogDebug("First looking for `ExifSubIfd` directory for {FilePath}", filePath);
-		var exifSubIfdDirectory = fileDataDirectories.OfType<ExifSubIfdDirectory>().SingleOrDefault();
+		var exifSubIfdDirectory = fileDataDirectories.OfType<ExifSubIfdDirectory>().FirstOrDefault();
 		if (exifSubIfdDirectory == null)
 		{
 			_logger.LogDebug("No `ExifSubIfd` directory found on {FilePath}", filePath);
@@ -187,7 +187,7 @@ public class ExifParserService : IExifParserService
 	private DateTime? ParseExifIfd0Directory(IEnumerable<Directory> fileDataDirectories, string filePath)
 	{
 		_logger.LogDebug("Alternatively looking for `ExifIfd0` directory for {FilePath}", filePath);
-		var exifSubIfdDirectory = fileDataDirectories.OfType<ExifIfd0Directory>().SingleOrDefault();
+		var exifSubIfdDirectory = fileDataDirectories.OfType<ExifIfd0Directory>().FirstOrDefault();
 		if (exifSubIfdDirectory == null)
 		{
 			_logger.LogDebug("No `ExifIfd0` directory found on {FilePath}", filePath);

@@ -258,7 +258,7 @@ public static class Program
 			services.AddSingleton(toolOptions);
 			services.AddTransient(typeof(IConsoleRunner), typeof(TConsoleRunner));
 			services.AddTransient<IFileSystem, FileSystem>();
-			services.AddTransient<IExifParserService, ExifParserService>();
+			services.AddTransient<IExifParserService, ExifToolParserService>();
 			services.AddTransient<IExifDataAppenderService, ExifDataAppenderService>();
 			services.AddTransient<IPhotoCollectorService, PhotoCollectorService>();
 			services.AddTransient<IDirectoryGrouperService, DirectoryGrouperService>();
