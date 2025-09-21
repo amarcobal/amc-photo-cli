@@ -100,48 +100,9 @@ public record Photo
 		}
 	}
 
-	/// <summary>
-	/// Asigna el autor y dispositivo basado en la información de metadatos y MediaIdentityService
-	/// </summary>
-	public void AssignMediaIdentity(IMediaIdentityService mediaIdentityService)
+	public void SetMediaIdentity(Author author, Device device)
 	{
-		if (ExifData == null)
-			throw new PhotoCliException("ExifData must be set before assigning media identity");
-
-		// Obtener make y model de los metadatos
-		string? make = ExifData.Make;
-		string? model = ExifData.Model;
-		DateTime? takenDate = TakenDateTime;
-
-		if (string.IsNullOrEmpty(model) && string.IsNullOrEmpty(make))
-		{
-			// No hay info, usar genéricos
-			Device = mediaIdentityService.GetDefaultDevice();
-			Author = mediaIdentityService.GetDefaultAuthor();
-			return;
-		}
-
-		// Buscar dispositivo
-		Device = mediaIdentityService.GetDevices()
-			.FirstOrDefault(d =>
-				(string.IsNullOrEmpty(d.Make) || d.Make == make) &&
-				(string.IsNullOrEmpty(d.Model) || d.Model == model))
-			?? mediaIdentityService.GetDefaultDevice();
-
-		// Buscar autor por dispositivo y fecha
-		if (takenDate.HasValue)
-		{
-			Author = mediaIdentityService.GetAuthors()
-				.FirstOrDefault(a =>
-					a.Devices.Any(ad =>
-						ad.Device.ID == Device.ID &&
-						(ad.From == null || takenDate >= ad.From) &&
-						(ad.To == null || takenDate <= ad.To)))
-				?? mediaIdentityService.GetDefaultAuthor();
-		}
-		else
-		{
-			Author = mediaIdentityService.GetDefaultAuthor();
-		}
+		Author = author;
+		Device = device;
 	}
 }

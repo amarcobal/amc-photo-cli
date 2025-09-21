@@ -100,7 +100,7 @@ public class ExifDataGrouperService : IExifDataGrouperService
 					g.TakenDateTime!.Value.Hour,
 					g.TakenDateTime!.Value.Minute,
 					g.TakenDateTime!.Value.Second,
-					SubSeconds = g.ExifData?.SubSeconds?.Value
+					SubSeconds = g.ExifData?.SubSeconds?.Padded()
 				}).ToDictionary(k =>
 				{
 					var dateTime = new DateTime(k.Key.Date.Year, k.Key.Date.Month, k.Key.Date.Day,
@@ -117,9 +117,9 @@ public class ExifDataGrouperService : IExifDataGrouperService
 					g.TakenDateTime!.Value.Hour,
 					g.TakenDateTime!.Value.Minute,
 					g.TakenDateTime!.Value.Second,
-					SubSeconds = g.ExifData?.SubSeconds?.Value,
-					Author = g.Author!.Name,
-					Device = g.Device!.Model
+					SubSeconds = g.ExifData?.SubSeconds?.Padded(),
+					Author = g.Author!.Alias,
+					Device = g.Device!.Alias
 				}).ToDictionary(k =>
 				{
 					var dateTime = new DateTime(k.Key.Date.Year, k.Key.Date.Month, k.Key.Date.Day,
@@ -136,7 +136,7 @@ public class ExifDataGrouperService : IExifDataGrouperService
 					g.TakenDateTime!.Value.Hour,
 					g.TakenDateTime!.Value.Minute,
 					g.TakenDateTime!.Value.Second,
-					SubSeconds = g.ExifData?.SubSeconds?.Value,
+					SubSeconds = g.ExifData?.SubSeconds?.Padded(),
 					Author = g.Author!.Alias,
 					Device = g.Device!.Alias,
 					OriginalFileName = g.OriginalFileName,
@@ -163,22 +163,24 @@ public class ExifDataGrouperService : IExifDataGrouperService
 		return isDateBeforeAddress ? $"{dateTimeFormat}-{address}" : $"{address}-{dateTimeFormat}";
 	}
 
-	private string FormatDateTimeWithSubseconds(DateTime dateTime, int? subSeconds)
+	private string FormatDateTimeWithSubseconds(DateTime dateTime, string? subSeconds)
 	{
-		var sub = subSeconds.HasValue
-			? subSeconds.Value.ToString("D3")
-			: "000";
+	//	var sub = subSeconds
+	//		? subSeconds.Value.ToString("D3")
+	//		: "000";
 
-		return $"{dateTime:yyyyMMdd_HHmmss}_{sub}";
+		var sub = string.IsNullOrEmpty(subSeconds) ? "000" : subSeconds; ;
+
+		return $"{dateTime:yyyy-MM-dd_HH-mm-ss}-{sub}";
 	}
 
-	private string FormatDateTimeWithSubsecondsAuthorDevice(DateTime dateTime, int? subSeconds, string author, string device)
+	private string FormatDateTimeWithSubsecondsAuthorDevice(DateTime dateTime, string? subSeconds, string author, string device)
 	{
 		var baseName = FormatDateTimeWithSubseconds(dateTime, subSeconds);
 		return $"{baseName}-{author}-{device}";
 	}
 
-	private string FormatDateTimeWithSubsecondsAuthorDeviceOriginalName(DateTime dateTime, int? subSeconds, string author, string device, string originalName)
+	private string FormatDateTimeWithSubsecondsAuthorDeviceOriginalName(DateTime dateTime, string? subSeconds, string author, string device, string originalName)
 	{
 		var baseName = FormatDateTimeWithSubsecondsAuthorDevice(dateTime, subSeconds, author, device);
 		return $"{baseName}-{originalName}";

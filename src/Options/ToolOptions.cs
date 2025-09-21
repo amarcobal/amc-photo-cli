@@ -29,6 +29,10 @@ public class ToolOptions
 	internal const int CoordinatePrecisionDefault = 4;
 	internal static readonly string[] SupportedExtensionsDefault = [ "jpg", "jpeg", "heic", "png" ];
 	public static readonly string[] CompanionExtensionsDefault = [ "mov" ];
+	internal const string? AuthorsYamlDefault = "";
+	internal const string? DevicesYamlDefault = "";
+	internal const string? ExifToolFileConfigDefault = "";
+
 
 	public ToolOptions(ToolOptionsRaw options)
 	{
@@ -63,6 +67,9 @@ public class ToolOptions
 		CoordinatePrecision = options.CoordinatePrecision ?? CoordinatePrecisionDefault;
 		SupportedExtensions = options.SupportedExtensions ?? SupportedExtensionsDefault;
 		CompanionExtensions = options.CompanionExtensions ?? CompanionExtensionsDefault;
+		AuthorsYaml = options.AuthorsYaml;
+		DevicesYaml = options.DevicesYaml;
+		ExifToolFileConfig = options.ExifToolFileConfig;
 	}
 
 	public LogLevel LogLevel { get; set; }
@@ -99,6 +106,10 @@ public class ToolOptions
 	public string ArchivePhotoTakenDateHashSeparator { get; set; }
 	public string[] SupportedExtensions { get; set; }
 	public string[] CompanionExtensions { get; set; }
+
+	public string? AuthorsYaml { get; set; }
+	public string? DevicesYaml { get; set; }
+	public string? ExifToolFileConfig { get; set; }
 
 	public static ToolOptions Default()
 	{

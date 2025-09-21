@@ -4,7 +4,7 @@ public record ExifData
 {
 	private readonly string _reverseGeocodeSeparator;
 
-	public ExifData(DateTime? takenDate, Coordinate? coordinate, string reverseGeocodeSeparator, string? make = null, string? model = null, SubSeconds? subSeconds = null, string? originalFileName = null)
+	public ExifData(DateTime? takenDate, Coordinate? coordinate, string reverseGeocodeSeparator, string? make = null, string? model = null, string serialNumber = null, SubSeconds? subSeconds = null, string? originalFileName = null)
 	{
 		(TakenDate, Coordinate, _reverseGeocodeSeparator, Make, Model, SubSeconds, OriginalFileName) = (takenDate, coordinate, reverseGeocodeSeparator, make, model, subSeconds, originalFileName);
 	}
@@ -14,6 +14,7 @@ public record ExifData
 
 	public string? Make { get; }
 	public string? Model { get; }
+	public string? SerialNumber { get; }
 	public SubSeconds? SubSeconds { get; }
 	public string? OriginalFileName { get; }
 

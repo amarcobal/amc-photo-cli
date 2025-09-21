@@ -260,6 +260,7 @@ public static class Program
 			services.AddTransient<IFileSystem, FileSystem>();
 			services.AddTransient<IExifParserService, ExifToolParserService>();
 			services.AddTransient<IExifDataAppenderService, ExifDataAppenderService>();
+			services.AddTransient<IMediaIdentityAppenderService, MediaIdentityAppenderService>();
 			services.AddTransient<IPhotoCollectorService, PhotoCollectorService>();
 			services.AddTransient<IDirectoryGrouperService, DirectoryGrouperService>();
 			services.AddTransient<IFileNamerService, FileNamerService>();

@@ -58,6 +58,7 @@ public class ExifParserService : IExifParserService
 
 		string? make = null;
 		string? model = null;
+		string? serialNumber = null;
 		if (parseMakeModel)
 			(make, model) = ParseMakeModel(fileDataDirectories, filePath);
 
@@ -78,7 +79,7 @@ public class ExifParserService : IExifParserService
 		else
 			++_statistics.PhotoThatNoCoordinateAndNoTakenDate;
 
-		return new ExifData(photoTaken, coordinate, _options.AddressSeparator, make, model, subSeconds, originalFileName);
+		return new ExifData(photoTaken, coordinate, _options.AddressSeparator, make, model, null, subSeconds, originalFileName);
 	}
 
 	private (string? make, string? model) ParseMakeModel(IEnumerable<Directory> directories, string filePath)

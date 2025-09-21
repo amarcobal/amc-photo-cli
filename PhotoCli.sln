@@ -1,8 +1,16 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35527.113 d17.12
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoCli", "src\PhotoCli.csproj", "{780948EF-559B-44F8-94FE-53F0D9EB8B39}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482} = {F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoCli.Tests", "tests\PhotoCli.Tests.csproj", "{48AFCE4F-B842-4745-A789-AB3732EB3A82}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpExifTool", "SharpExifTool\SharpExifTool.csproj", "{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,5 +26,12 @@ Global
 		{48AFCE4F-B842-4745-A789-AB3732EB3A82}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{48AFCE4F-B842-4745-A789-AB3732EB3A82}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{48AFCE4F-B842-4745-A789-AB3732EB3A82}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 EndGlobal

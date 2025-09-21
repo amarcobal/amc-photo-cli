@@ -71,7 +71,7 @@ public abstract class BaseRunner
 
 	protected bool NoExifDataPreventActions(out ExitCode exitCode, bool allPhotosAreValid, bool allPhotosHasPhotoTaken, bool allPhotosHasCoordinate,
 		bool isInvalidFileFormatPreventProcessOptionSelected, bool isNoPhotoTakenDatePreventProcessOptionSelected, bool isNoCoordinatePreventProcessOptionSelected,
-		IReadOnlyCollection<Photo> exifDataByPhotoBundle)
+		IReadOnlyCollection<Photo> exifDataByPhotoBundle, bool allPhotosHasAuthor = true, bool isNoAuthorPreventProcessOptionSelected = true)
 	{
 		var invalidFileFormatPreventProcess = InvalidFileFormatActionPreventProcess(allPhotosAreValid, isInvalidFileFormatPreventProcessOptionSelected, exifDataByPhotoBundle);
 		if (invalidFileFormatPreventProcess)
@@ -82,6 +82,7 @@ public abstract class BaseRunner
 
 		var noPhotoDateTimeTakenActionPreventProcess = NoPhotoTakenDateActionPreventProcess(allPhotosHasPhotoTaken, isNoPhotoTakenDatePreventProcessOptionSelected, exifDataByPhotoBundle);
 		var noCoordinateActionPreventProcess = NoCoordinateActionPreventProcess(allPhotosHasCoordinate, isNoCoordinatePreventProcessOptionSelected, exifDataByPhotoBundle);
+		var noAuthorActionPreventProcess = NoAuthorActionPreventProcess(allPhotosHasAuthor, isNoAuthorPreventProcessOptionSelected, exifDataByPhotoBundle);
 
 		if (noPhotoDateTimeTakenActionPreventProcess && noCoordinateActionPreventProcess)
 		{
@@ -98,6 +99,12 @@ public abstract class BaseRunner
 		if (noCoordinateActionPreventProcess)
 		{
 			exitCode = ExitCode.PhotosWithNoCoordinatePreventedProcess;
+			return false;
+		}
+
+		if (noAuthorActionPreventProcess)
+		{
+			exitCode = ExitCode.PhotosWithNoAuthorPreventedProcess;
 			return false;
 		}
 
@@ -135,6 +142,17 @@ public abstract class BaseRunner
 		var photosWithNoCoordinate = photos.Where(w => !w.HasCoordinate);
 		foreach (var photo in photosWithNoCoordinate)
 			_logger.LogError("No coordinate: {Path}", photo.PhotoFile.SourcePath);
+		return true;
+	}
+
+	private bool NoAuthorActionPreventProcess(bool allPhotosHasAuthor, bool isPreventProcessOptionSelected, IReadOnlyCollection<Photo> photos)
+	{
+		if (allPhotosHasAuthor || !isPreventProcessOptionSelected)
+			return false;
+		_logger.LogDebug("Prevented process because no author action set to prevent process");
+		var photosWithNoAuthor = photos.Where(w => !w.HasAuthor);
+		foreach (var photo in photosWithNoAuthor)
+			_logger.LogError("No author: {Path}", photo.PhotoFile.SourcePath);
 		return true;
 	}
 

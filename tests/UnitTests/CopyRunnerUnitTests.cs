@@ -4,6 +4,7 @@ public class CopyRunnerUnitTests
 {
 	private readonly Mock<IPhotoCollectorService> _photoCollectorMock = new(MockBehavior.Strict);
 	private readonly Mock<IExifDataAppenderService> _exifDataAppenderMock = new(MockBehavior.Strict);
+	private readonly Mock<IMediaIdentityAppenderService> _mediaIdentityAppenderMock = new(MockBehavior.Strict);
 	private readonly Mock<IDirectoryGrouperService> _directoryGrouperMock = new(MockBehavior.Strict);
 	private readonly Mock<IFileNamerService> _fileNamerMock = new(MockBehavior.Strict);
 	private readonly Mock<IFileService> _fileServiceMock = new(MockBehavior.Strict);
@@ -326,7 +327,7 @@ public class CopyRunnerUnitTests
 		if (createSourcePath)
 			CreateSourcePathDirectory();
 
-		return new CopyRunner(NullLogger<CopyRunner>.Instance, options, _photoCollectorMock.Object, _exifDataAppenderMock.Object, _directoryGrouperMock.Object, _fileNamerMock.Object,
+		return new CopyRunner(NullLogger<CopyRunner>.Instance, options, _photoCollectorMock.Object, _exifDataAppenderMock.Object, _mediaIdentityAppenderMock.Object, _directoryGrouperMock.Object, _fileNamerMock.Object,
 			_fileServiceMock.Object, _fileSystemMock, _organizeByNoPhotoTakenActionMock.Object, _organizeDirectoriesByFolderProcessTypeMock.Object, _reverseGeocodeFetcherMock.Object,
 			_csvServiceMock.Object, ToolOptionFakes.Create(), new Statistics(), ConsoleWriterFakes.Valid());
 	}

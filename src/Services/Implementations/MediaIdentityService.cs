@@ -10,9 +10,9 @@ public class MediaIdentityService : IMediaIdentityService
 {
 	private readonly MediaIdentity _mediaIdentity;
 	private readonly ILogger<MediaIdentityService> _logger;
-	private readonly IMediaIdentityOptions _options;
+	private readonly ToolOptions _options;
 
-	public MediaIdentityService(IMediaIdentityOptions options, ILogger<MediaIdentityService> logger)
+	public MediaIdentityService(ToolOptions options, ILogger<MediaIdentityService> logger)
 	{
 		_options = options;
 		_logger = logger;
@@ -36,21 +36,68 @@ public class MediaIdentityService : IMediaIdentityService
 	public Device GetDeviceById(string deviceId)
 		=> _mediaIdentity.Devices.FirstOrDefault(d => d.ID == deviceId) ?? GetDefaultDevice();
 
+	public Device GetDevice(Photo photo)
+	{
+		var make = photo.ExifData?.Make;
+		var model = photo.ExifData?.Model;
+		var serialNumber = photo.ExifData?.SerialNumber;
+
+		Device? device = null;
+
+		if (!string.IsNullOrEmpty(serialNumber))
+		{
+			device = _mediaIdentity.Devices
+				.FirstOrDefault(d => d.SerialNumber != null && d.SerialNumber == serialNumber);
+		}
+
+		if (device == null)
+		{
+			device = _mediaIdentity.Devices
+				.FirstOrDefault(d =>
+					(string.IsNullOrEmpty(d.Make) || d.Make == make) &&
+					(string.IsNullOrEmpty(d.Model) || d.Model == model));
+		}
+
+		return device ??= _mediaIdentity.GetDefaultDevice();
+
+	}
+
+	public Author GetAuthor(Photo photo)
+	{
+		var takenDate = photo.TakenDateTime;
+		var device = GetDevice(photo);
+
+		if (takenDate.HasValue)
+		{
+			return GetAuthorByDevice(device.ID, takenDate.Value);
+		}
+
+		return GetDefaultAuthor();
+	}
+
+
 	public Author GetDefaultAuthor() => _mediaIdentity.Authors.First(a => a.ID == "Unknown");
 	public Device GetDefaultDevice() => _mediaIdentity.Devices.First(d => d.ID == "Unknown");
 
 	private MediaIdentity LoadMediaIdentity()
 	{
 		var deserializer = new DeserializerBuilder()
-			.WithNamingConvention(CamelCaseNamingConvention.Instance)
-			.Build();
+						.IgnoreUnmatchedProperties()
+						.WithNamingConvention(NullNamingConvention.Instance)
+						.Build();
 
 		List<Author> authors;
 		List<Device> devices;
 
+		string currentDir = Path.GetDirectoryName(
+		new Uri(System.Reflection.Assembly.GetExecutingAssembly().Location).LocalPath)!;
+
+		string authorsPath = ResolvePath(_options.AuthorsYaml, currentDir);
+		string devicesPath = ResolvePath(_options.DevicesYaml, currentDir);
+
 		try
 		{
-			var authorsYaml = File.ReadAllText("Config/authors.yaml", Encoding.UTF8);
+			var authorsYaml = File.ReadAllText(authorsPath, Encoding.UTF8);
 			authors = deserializer.Deserialize<AuthorsRoot>(authorsYaml)?.Authors ?? new List<Author>();
 		}
 		catch
@@ -60,7 +107,7 @@ public class MediaIdentityService : IMediaIdentityService
 
 		try
 		{
-			var devicesYaml = File.ReadAllText("Config/devices.yaml", Encoding.UTF8);
+			var devicesYaml = File.ReadAllText(devicesPath, Encoding.UTF8);
 			devices = deserializer.Deserialize<DevicesRoot>(devicesYaml)?.Devices ?? new List<Device>();
 		}
 		catch
@@ -106,5 +153,13 @@ public class MediaIdentityService : IMediaIdentityService
 			Authors = authors,
 			Devices = devices
 		};
+	}
+
+	private static string ResolvePath(string path, string baseDir)
+	{
+		if (Path.IsPathRooted(path))
+			return path;
+
+		return Path.GetFullPath(Path.Combine(baseDir, path));
 	}
 }

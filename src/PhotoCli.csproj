@@ -50,6 +50,16 @@
         <None Include="..\docs\assets\icon.png" Pack="true" PackagePath="\" />
     </ItemGroup>
 
+	<ItemGroup>
+		<Content Include="Config\**\*.*">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SharpExifTool\SharpExifTool.csproj" />
+    </ItemGroup>
+
     <ItemGroup>
         <RuntimeHostConfigurationOption Include="rollForward" Value="LatestMajor" />
     </ItemGroup>

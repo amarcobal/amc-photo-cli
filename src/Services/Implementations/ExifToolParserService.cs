@@ -5,11 +5,43 @@ using System.IO.Abstractions;
 using Microsoft.Extensions.Logging;
 using SharpExifTool;
 using PhotoCli.Models;
+using PhotoCli.Options;
 
 namespace PhotoCli.Services.Implementations
 {
 	public static class ExifToolTags
 	{
+		//CompositeTags
+		public const string CompositeTagNamespace = "Composite";
+
+		//Hashes
+		public const string MD5 = $"{CompositeTagNamespace}:MD5";
+
+		//Identity
+		public const string MyMake = $"{CompositeTagNamespace}:MyMake";
+		public const string MyModel = $"{CompositeTagNamespace}:MyModel";
+		public const string MySerialNumber = $"{CompositeTagNamespace}:MySerialNumber";
+
+		public const string MyAuthorName = $"{CompositeTagNamespace}:MyAuthorName";
+		public const string MyAuthorAlias = $"{CompositeTagNamespace}:MyAuthorAlias";
+		public const string MyDeviceName = $"{CompositeTagNamespace}:MyDeviceName";
+		public const string MyDeviceAlias = $"{CompositeTagNamespace}:MyDeviceAlias";
+
+		//Event
+		public const string MyAlbum = $"{CompositeTagNamespace}:MyAlbum";
+
+		//Dates
+		public const string MyDecade = $"{CompositeTagNamespace}:MyDecade";
+		public const string MyDate = $"{CompositeTagNamespace}:MyDate";
+		public const string MyShortMonthName = $"{CompositeTagNamespace}:MyShortMonthName";
+		public const string MySubseconds = $"{CompositeTagNamespace}:MySubseconds";
+
+		//Name Convention
+		public const string MyFullFolderFileConvention = $"{CompositeTagNamespace}:MyFullFolderFileConvention";
+		public const string MyFolderConvention = $"{CompositeTagNamespace}:MyFolderConvention";
+		public const string MyFileNameConvention = $"{CompositeTagNamespace}:MyFileNameConvention";
+
+
 		// Fechas
 		public const string DateTimeOriginal = "ExifIFD:DateTimeOriginal";
 		public const string CreateDate = "ExifIFD:CreateDate";
@@ -24,11 +56,7 @@ namespace PhotoCli.Services.Implementations
 		public const string GPSLatitude = "GPSLatitude";
 		public const string GPSLongitude = "GPSLongitude";
 
-		// Cámara
-		public const string Make = "IFD0:Make";
-		public const string Model = "IFD0:Model";
-		public const string QuicktimeMake = "com.apple.quicktime.make";
-		public const string QuicktimeModel = "com.apple.quicktime.model";
+
 
 		// Otros
 		public const string PreservedFileName = "PreservedFileName";
@@ -68,20 +96,28 @@ namespace PhotoCli.Services.Implementations
 			try
 			{
 				ICollection<KeyValuePair<string, string>> metadata;
-				using (var exifTool = new ExifTool())
+				using (var exifTool = new ExifTool(exiftoolConfigPath: _options.ExifToolFileConfig))
 				{
-					metadata = exifTool.ExtractAllMetadata(filePath, "-config \"C:\\Users\\amarcobal\\Desktop\\ExifToolTest\\Config\\EXIFTOOL-CONFIG_AMC-Photography_Custom.config\"");
+					metadata = exifTool.ExtractAllMetadata(filePath);
 				}
+
+				//Dates
 
 				DateTime? photoTaken = null;
 				if (parseDateTime)
 				{
-					photoTaken = metadata.GetDateTime(ExifToolTags.DateTimeOriginal)
-							  ?? metadata.GetDateTime(ExifToolTags.CreateDate)
-							  ?? metadata.GetDateTime(ExifToolTags.CompositeDateTimeOriginal)
-							  ?? metadata.GetDateTime(ExifToolTags.CompositeCreateDate)
-							  ?? metadata.GetDateTime(ExifToolTags.CompositeDateTimeCreated);
+					photoTaken = metadata.GetDateTime(ExifToolTags.MyDate);
 				}
+
+				SubSeconds? subSeconds = null;
+				if (parseSubseconds)
+				{
+					var ss = metadata.GetString(ExifToolTags.SubSecTimeOriginal);
+					if (!string.IsNullOrWhiteSpace(ss))
+						subSeconds = new SubSeconds(ss);
+				}
+
+				//Coordinate
 
 				Coordinate? coordinate = null;
 				if (parseCoordinate)
@@ -94,21 +130,22 @@ namespace PhotoCli.Services.Implementations
 							Math.Round(lon.Value, _coordinatePrecision));
 				}
 
+				//Identity
 				string? make = null;
 				string? model = null;
+				string? serialNumber = null;
 				if (parseMakeModel)
 				{
-					make = metadata.GetString(ExifToolTags.Make) ?? metadata.GetString(ExifToolTags.QuicktimeMake);
-					model = metadata.GetString(ExifToolTags.Model) ?? metadata.GetString(ExifToolTags.QuicktimeModel);
+					make = metadata.GetString(ExifToolTags.MyMake);
+					model = metadata.GetString(ExifToolTags.MyModel);
+					serialNumber = metadata.GetString(ExifToolTags.MySerialNumber);
 				}
 
-				SubSeconds? subSeconds = null;
-				if (parseSubseconds)
-				{
-					var ss = metadata.GetString(ExifToolTags.SubSecTimeOriginal);
-					if (!string.IsNullOrWhiteSpace(ss))
-						subSeconds = new SubSeconds(ss);
-				}
+				//Name Convention
+				string? MyFullFolderFileConvention = metadata.GetString(ExifToolTags.MyFullFolderFileConvention);
+				string? MyFolderConvention = metadata.GetString(ExifToolTags.MyFolderConvention);
+				string? MyFileNameConvention = metadata.GetString(ExifToolTags.MyFileNameConvention);
+
 
 				string? originalFileName = null;
 				if (parseOriginalFileName)
@@ -118,7 +155,7 @@ namespace PhotoCli.Services.Implementations
 				}
 
 				// Solo usamos los campos que tu ExifData acepta
-				return new ExifData(photoTaken, coordinate, _options.AddressSeparator, make, model, subSeconds, originalFileName);
+				return new ExifData(photoTaken, coordinate, _options.AddressSeparator, make, model, serialNumber, subSeconds, originalFileName);
 			}
 			catch (Exception ex)
 			{

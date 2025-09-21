@@ -9,6 +9,7 @@ public class CopyRunner : BaseRunner, IConsoleRunner
 	private readonly ICsvService _csvService;
 	private readonly IDirectoryGrouperService _directoryGrouperService;
 	private readonly IExifDataAppenderService _exifDataAppenderService;
+	private readonly IMediaIdentityAppenderService _mediaIdentityAppenderService;
 	private readonly IExifOrganizerService _exifOrganizerService;
 	private readonly IFileNamerService _fileNamerService;
 	private readonly IFileService _fileService;
@@ -21,7 +22,28 @@ public class CopyRunner : BaseRunner, IConsoleRunner
 	private readonly ToolOptions _toolOptions;
 	private readonly IConsoleWriter _consoleWriter;
 
-	public CopyRunner(ILogger<CopyRunner> logger, CopyOptions options, IPhotoCollectorService photoCollectorService, IExifDataAppenderService exifDataAppenderService,
+	//public CopyRunner(ILogger<CopyRunner> logger, CopyOptions options, IPhotoCollectorService photoCollectorService, IExifDataAppenderService exifDataAppenderService,
+	//	IDirectoryGrouperService directoryGrouperService, IFileNamerService fileNamerService, IFileService fileService, IFileSystem fileSystem, IExifOrganizerService exifOrganizerService,
+	//	IFolderRenamerService folderRenamer, IReverseGeocodeFetcherService reverseGeocodeFetcherService, ICsvService csvService, ToolOptions toolOptions, Statistics statistics,
+	//	IConsoleWriter consoleWriter) : base(logger, fileSystem, statistics, consoleWriter)
+	//{
+	//	_options = options;
+	//	_logger = logger;
+	//	_photoCollectorService = photoCollectorService;
+	//	_exifDataAppenderService = exifDataAppenderService;
+	//	_directoryGrouperService = directoryGrouperService;
+	//	_fileNamerService = fileNamerService;
+	//	_fileService = fileService;
+	//	_fileSystem = fileSystem;
+	//	_exifOrganizerService = exifOrganizerService;
+	//	_folderRenamer = folderRenamer;
+	//	_reverseGeocodeFetcherService = reverseGeocodeFetcherService;
+	//	_csvService = csvService;
+	//	_toolOptions = toolOptions;
+	//	_consoleWriter = consoleWriter;
+	//}
+
+	public CopyRunner(ILogger<CopyRunner> logger, CopyOptions options, IPhotoCollectorService photoCollectorService, IExifDataAppenderService exifDataAppenderService, IMediaIdentityAppenderService mediaIdentityAppenderService,
 		IDirectoryGrouperService directoryGrouperService, IFileNamerService fileNamerService, IFileService fileService, IFileSystem fileSystem, IExifOrganizerService exifOrganizerService,
 		IFolderRenamerService folderRenamer, IReverseGeocodeFetcherService reverseGeocodeFetcherService, ICsvService csvService, ToolOptions toolOptions, Statistics statistics,
 		IConsoleWriter consoleWriter) : base(logger, fileSystem, statistics, consoleWriter)
@@ -30,6 +52,7 @@ public class CopyRunner : BaseRunner, IConsoleRunner
 		_logger = logger;
 		_photoCollectorService = photoCollectorService;
 		_exifDataAppenderService = exifDataAppenderService;
+		_mediaIdentityAppenderService = mediaIdentityAppenderService;
 		_directoryGrouperService = directoryGrouperService;
 		_fileNamerService = fileNamerService;
 		_fileService = fileService;
@@ -77,6 +100,8 @@ public class CopyRunner : BaseRunner, IConsoleRunner
 			_reverseGeocodeFetcherService.RateLimitWarning();
 			photosWithExif = await _reverseGeocodeFetcherService.Fetch(photosWithExif);
 		}
+
+		photosWithExif = _mediaIdentityAppenderService.AppendMediaIdentity(photosWithExif, out allPhotosAreValid, out var allPhotosHasAuthor, out var allPhotosHasDevice);
 
 		var invalidFileFormatGroupedInSubFolder = _options.InvalidFileFormatAction == CopyInvalidFormatAction.InSubFolder;
 		var noPhotoDateTimeTakenGroupedInSubFolder = _options.NoPhotoTakenDateAction == CopyNoPhotoTakenDateAction.InSubFolder;

@@ -28,6 +28,10 @@
     "AMC - Test - Info": {
       "commandName": "Project",
       "commandLineArgs": "info -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -o \"C:\\Work\\Photography\\Test\\Photo-cli\\Reports\" -a"
+    },
+    "AMC - Test - Copy": {
+      "commandName": "Project",
+      "commandLineArgs": "copy --process-type FlattenAllSubFolders --group-by DecadeYearYearShortMonthNameYearMonthDay --naming-style DateTimeWithSubsecondsAuthorDevice --number-style OnlySequentialNumbers -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -o \"C:\\Work\\Photography\\Test\\Photo-cli\\Photo-Video\" -d"
     }
   }
 }

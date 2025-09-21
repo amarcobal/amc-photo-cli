@@ -7,5 +7,5 @@ public record Author
 	public string Alias { get; init; } = string.Empty;
 
 	// Relación: un autor puede tener varios dispositivos con rangos de fechas
-	public IReadOnlyCollection<AuthorDevice> Devices { get; init; } = Array.Empty<AuthorDevice>();
+	public List<AuthorDevice> Devices { get; set; } = new();
 }

@@ -9,27 +9,32 @@ namespace PhotoCli.Models;
 public class SubSeconds
 {
 	public string Raw { get; }
-	public int Value { get; }
 	public int Digits { get; }
+	public int Milliseconds { get; } // siempre entre 0-999
 
 	public SubSeconds(string raw)
 	{
-		Raw = raw;
-		Digits = raw.Length;
-		Value = int.TryParse(raw, out var val) ? val : 0;
+		Raw = raw ?? "0";
+		Digits = Raw.Length;
+
+		if (!int.TryParse(Raw, out var val))
+			val = 0;
+
+		// Normalizamos a fracción de segundo según nº de dígitos
+		double fraction = val / Math.Pow(10, Digits); // ej: "865655" → 0.865655 sec
+
+		// Pasamos a ms y redondeamos
+		Milliseconds = (int)Math.Round(fraction * 1000, MidpointRounding.AwayFromZero);
+
+		// Controlamos overflow tipo "999.9 → 1000"
+		if (Milliseconds == 1000)
+			Milliseconds = 999;
 	}
 
-	public string Padded(int totalDigits = 3)
-		=> Value.ToString($"D{totalDigits}");
+	public string Padded()
+		=> Milliseconds.ToString("D3");
 
-	public double AsMilliseconds()
-		=> Digits switch
-		{
-			1 => Value * 100,   // "1" → 100ms
-			2 => Value * 10,    // "12" → 120ms
-			3 => Value,         // "123" → 123ms
-			_ => 0
-		};
-
-	public override string ToString() => Raw;
+	public override string ToString()
+		=> Padded();
 }
+

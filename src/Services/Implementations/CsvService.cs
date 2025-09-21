@@ -22,17 +22,21 @@ public class CsvService : ICsvService
 	public async Task CreateCopyReport(IEnumerable<Photo> photos, string outputPath, bool isDryRun = false)
 	{
 		_consoleWriter.ProgressStart(ProgressName);
+		string fileName;
 		string reportFile;
+		var now = DateTime.Now;
 		if (isDryRun)
 		{
-			reportFile = _options.DryRunCsvReportFileName;
+			fileName = $"{now:yyyy-MM-dd_HH-mm-ss}_" + _options.DryRunCsvReportFileName;
+			reportFile = Path.Combine(outputPath, fileName);
 		}
 		else
 		{
+			fileName = $"{now:yyyy-MM-dd_HH-mm-ss}_" + _options.CsvReportFileName;
 			var directory = _fileSystem.DirectoryInfo.New(outputPath);
 			if (!directory.Exists)
 				directory.Create();
-			reportFile = Path.Combine(outputPath, _options.CsvReportFileName);
+			reportFile = Path.Combine(outputPath, fileName);
 		}
 
 		await WritePhotoToCsvOutput(photos, reportFile);
@@ -70,9 +74,10 @@ public class CsvService : ICsvService
 	private static PhotoCsv Map(Photo photo, bool mapNewPath)
 	{
 		var takenDate = photo.ExifData?.TakenDate;
-		var subseconds = photo.ExifData?.SubSeconds?.Raw;
+		var subseconds = photo.ExifData?.SubSeconds?.Padded();
 		var make = photo.ExifData?.Make;
 		var model = photo.ExifData?.Model;
+		var serialNumber = photo.ExifData?.SerialNumber;
 		var originalFileName = photo.ExifData?.OriginalFileName;
 		var author = photo.Author?.Name;
 		var device = photo.Device?.Name;

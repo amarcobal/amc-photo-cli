@@ -38,4 +38,8 @@ public class ToolOptionsRaw
 	public int? CoordinatePrecision { get; set; }
 	public string[]? SupportedExtensions { get; set; }
 	public string[]? CompanionExtensions { get; set; }
+
+	public string AuthorsYaml { get; set; }
+	public string DevicesYaml { get; set; }
+	public string ExifToolFileConfig { get; set; }
 }

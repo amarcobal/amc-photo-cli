@@ -4,14 +4,14 @@ Devices:
     Alias: "PG9A"
     Make: "Panasonic"
     Model: "DC-G9"
-    Serialnumber: "XHR2011210144"
+    SerialNumber: "XHR2011210144"
 
   - ID: PG9B
     Name: "Panasonic Lumix G9 B"
     Alias: "PG9B"
     Make: "Panasonic"
     Model: "DC-G9"
-    Serialnumber: "XHL2103080001"
+    SerialNumber: "XHL2103080001"
 
   - ID: XMI10
     Name: "Xiaomi Mi 10"
