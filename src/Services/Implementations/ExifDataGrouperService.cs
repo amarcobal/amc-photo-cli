@@ -177,13 +177,13 @@ public class ExifDataGrouperService : IExifDataGrouperService
 	private string FormatDateTimeWithSubsecondsAuthorDevice(DateTime dateTime, string? subSeconds, string author, string device)
 	{
 		var baseName = FormatDateTimeWithSubseconds(dateTime, subSeconds);
-		return $"{baseName}-{author}-{device}";
+		return $"{baseName}_{author}_{device}";
 	}
 
 	private string FormatDateTimeWithSubsecondsAuthorDeviceOriginalName(DateTime dateTime, string? subSeconds, string author, string device, string originalName)
 	{
 		var baseName = FormatDateTimeWithSubsecondsAuthorDevice(dateTime, subSeconds, author, device);
-		return $"{baseName}-{originalName}";
+		return $"{baseName}_{originalName}";
 	}
 
 

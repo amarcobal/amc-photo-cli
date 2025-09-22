@@ -29,16 +29,17 @@ public class MediaIdentityAppenderService : IMediaIdentityAppenderService
 			if (!photo.HasExifData)
 				photosAreValid = false;
 
-			var device = _mediaIdentityService.GetDevice(photo);
-			var author = _mediaIdentityService.GetAuthor(photo);
+			photo.SetDevice(_mediaIdentityService.GetDevice(photo));
 
-			if (photosHasAuthor && device == null)
-				photosHasAuthor = false;
-			if (photosHasDevice && author == null)
+			if (photosHasDevice && photo.Device == null)
 				photosHasDevice = false;
 
-			if (photo.HasExifData)
-				photo.SetMediaIdentity(author, device);
+			if (photo.HasDevice)
+				photo.SetAuthor(_mediaIdentityService.GetAuthor(photo));
+
+			if (photosHasAuthor && photo.Author == null)
+				photosHasAuthor = false;
+			
 		}
 
 		_consoleWriter.ProgressFinish(ProgressName);

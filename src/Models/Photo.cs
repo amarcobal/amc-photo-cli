@@ -100,6 +100,16 @@ public record Photo
 		}
 	}
 
+	public void SetDevice(Device device)
+	{
+		Device = device;
+	}
+
+	public void SetAuthor(Author author)
+	{
+		Author = author;
+	}
+
 	public void SetMediaIdentity(Author author, Device device)
 	{
 		Author = author;

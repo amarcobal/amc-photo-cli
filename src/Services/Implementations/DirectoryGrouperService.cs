@@ -71,11 +71,11 @@ public class DirectoryGrouperService : IDirectoryGrouperService
 
 				//Event
 				//var eventOrAlbum = photo.EventName ?? string.Empty; // <-- dinámico
-				var eventDate = $"{taken:yyyy-MM}";
-				var eventName = "Moments";
-				var fullEvent = $"{eventDate}" + (string.IsNullOrWhiteSpace(eventName) ? $"{eventDate} {eventName}" : string.Empty);
+				var eventDate = $"{taken:yyyy-MM-MMM}";
+				var eventName = $"{taken:yyyy-MM} Moments";
+				var fullEvent = $"{eventDate}" + (!string.IsNullOrWhiteSpace(eventName) ? $"{Path.DirectorySeparatorChar}{eventName}" : string.Empty);
 
-				targetRelativeDirectoryPath = $"{decade}{Path.DirectorySeparatorChar}{year}{Path.DirectorySeparatorChar}{year}-{month}-{shortMonthName}{Path.DirectorySeparatorChar}{fullEvent}";
+				targetRelativeDirectoryPath = $"{decade}{Path.DirectorySeparatorChar}{year}{Path.DirectorySeparatorChar}{fullEvent}";
 			}
 
 			else if (folderProcessType is FolderProcessType.Single)

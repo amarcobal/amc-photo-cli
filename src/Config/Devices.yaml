@@ -34,6 +34,13 @@ Devices:
     Model: "Pixel 8 Pro"
     Serialnumber: null
 
+  # - ID: XMI9
+  #   Name: "Xiaomi Mi 9"
+  #   Alias: "XMI9"
+  #   Make: "Xiaomi"
+  #   Model: "2201123G"
+  #   Serialnumber: null
+
   # Device genérico por defecto
   - ID: Unknown
     Name: "Unknown Device"

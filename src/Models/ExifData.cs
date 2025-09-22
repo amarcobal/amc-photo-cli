@@ -6,7 +6,7 @@ public record ExifData
 
 	public ExifData(DateTime? takenDate, Coordinate? coordinate, string reverseGeocodeSeparator, string? make = null, string? model = null, string serialNumber = null, SubSeconds? subSeconds = null, string? originalFileName = null)
 	{
-		(TakenDate, Coordinate, _reverseGeocodeSeparator, Make, Model, SubSeconds, OriginalFileName) = (takenDate, coordinate, reverseGeocodeSeparator, make, model, subSeconds, originalFileName);
+		(TakenDate, Coordinate, _reverseGeocodeSeparator, Make, Model, SubSeconds, SerialNumber, OriginalFileName) = (takenDate, coordinate, reverseGeocodeSeparator, make, model, subSeconds, serialNumber, originalFileName);
 	}
 
 	public DateTime? TakenDate { get; }

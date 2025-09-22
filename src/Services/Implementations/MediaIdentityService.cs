@@ -58,14 +58,14 @@ public class MediaIdentityService : IMediaIdentityService
 					(string.IsNullOrEmpty(d.Model) || d.Model == model));
 		}
 
-		return device ??= _mediaIdentity.GetDefaultDevice();
+		return device ??= GetDefaultDevice();
 
 	}
 
 	public Author GetAuthor(Photo photo)
 	{
 		var takenDate = photo.TakenDateTime;
-		var device = GetDevice(photo);
+		var device = photo.Device;
 
 		if (takenDate.HasValue)
 		{
@@ -97,22 +97,31 @@ public class MediaIdentityService : IMediaIdentityService
 
 		try
 		{
-			var authorsYaml = File.ReadAllText(authorsPath, Encoding.UTF8);
-			authors = deserializer.Deserialize<AuthorsRoot>(authorsYaml)?.Authors ?? new List<Author>();
-		}
-		catch
-		{
-			authors = new List<Author>();
-		}
-
-		try
-		{
 			var devicesYaml = File.ReadAllText(devicesPath, Encoding.UTF8);
 			devices = deserializer.Deserialize<DevicesRoot>(devicesYaml)?.Devices ?? new List<Device>();
 		}
 		catch
 		{
 			devices = new List<Device>();
+		}
+
+		try
+		{
+			var authorsYaml = File.ReadAllText(authorsPath, Encoding.UTF8);
+			authors = deserializer.Deserialize<AuthorsRoot>(authorsYaml)?.Authors ?? new List<Author>();
+
+			// Resolver referencias: conectar AuthorDevice.ID con el objeto Device
+			foreach (var author in authors)
+			{
+				foreach (var ad in author.Devices)
+				{
+					ad.Device = devices.FirstOrDefault(d => d.ID == ad.ID);
+				}
+			}
+		}
+		catch
+		{
+			authors = new List<Author>();
 		}
 
 		// Añadir dispositivo y autor por defecto si no existen
