@@ -12,6 +12,7 @@ public class CopyOptions : IReverseGeocodeOptions
 		string outputPath, NamingStyle namingStyle, FolderProcessType folderProcessType, NumberNamingTextStyle numberNamingTextStyle,
 		// Optional
 		CopyInvalidFormatAction invalidFileFormatAction, CopyNoPhotoTakenDateAction noPhotoTakenDateAction, CopyNoCoordinateAction noCoordinateAction,
+		CopyNoDeviceAction noDeviceAction, CopyNoAuthorAction noAuthorAction,
 		string? inputPath = null, bool isDryRun = false, GroupByFolderType? groupByFolderType = null, FolderAppendType? folderAppendType = null,
 		FolderAppendLocationType? folderAppendLocationType = null, bool verify = false,
 		// ReverseGeocode - Shared
@@ -29,6 +30,8 @@ public class CopyOptions : IReverseGeocodeOptions
 		InvalidFileFormatAction = invalidFileFormatAction;
 		NoPhotoTakenDateAction = noPhotoTakenDateAction;
 		NoCoordinateAction = noCoordinateAction;
+		NoDeviceAction = noDeviceAction;
+		NoAuthorAction = noAuthorAction;
 		InputPath = inputPath;
 		IsDryRun = isDryRun;
 		GroupByFolderType = groupByFolderType;
@@ -71,6 +74,11 @@ public class CopyOptions : IReverseGeocodeOptions
 	[Option(OptionNames.CopyNoCoordinateActionOptionNameShort, OptionNames.CopyNoCoordinateActionOptionNameLong, HelpText = HelpTexts.CopyNoCoordinateAction)]
 	public CopyNoCoordinateAction NoCoordinateAction { get; }
 
+	[Option(OptionNames.CopyNoDeviceActionOptionNameLong, HelpText = HelpTexts.CopyNoDeviceAction)]
+	public CopyNoDeviceAction NoDeviceAction { get; }
+
+	[Option(OptionNames.CopyNoAuthorActionOptionNameLong, HelpText = HelpTexts.CopyNoAuthorAction)]
+	public CopyNoAuthorAction NoAuthorAction { get; }
 	#endregion
 
 	#region Optional

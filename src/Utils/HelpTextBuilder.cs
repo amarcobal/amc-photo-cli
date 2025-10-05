@@ -48,20 +48,20 @@ public static class HelpTextBuilder
 			case OptionNames.CopyVerb:
 				WriteOptionArgumentsToConsole(
 					new CopyOptions(outputFolder, NamingStyle.Numeric, FolderProcessType.SubFoldersPreserveFolderHierarchy, NumberNamingTextStyle.PaddingZeroCharacter,
-						CopyInvalidFormatAction.Continue, CopyNoPhotoTakenDateAction.Continue, CopyNoCoordinateAction.Continue, inputFolder),
+						CopyInvalidFormatAction.Continue, CopyNoPhotoTakenDateAction.Continue, CopyNoCoordinateAction.Continue, CopyNoDeviceAction.Continue, CopyNoAuthorAction.Continue, inputFolder),
 					"Preserve same folder hierarchy, copy photos with sequential number ordering by photo taken date.",
 					textWriter);
 
 				WriteOptionArgumentsToConsole(
 					new CopyOptions(outputFolder, NamingStyle.DateTimeWithSeconds, FolderProcessType.FlattenAllSubFolders, NumberNamingTextStyle.OnlySequentialNumbers,
-						CopyInvalidFormatAction.Continue, CopyNoPhotoTakenDateAction.Continue, CopyNoCoordinateAction.Continue, inputFolder,
+						CopyInvalidFormatAction.Continue, CopyNoPhotoTakenDateAction.Continue, CopyNoCoordinateAction.Continue, CopyNoDeviceAction.Continue, CopyNoAuthorAction.Continue, inputFolder,
 						groupByFolderType: GroupByFolderType.YearMonthDay),
 					"Groups photos by photo taken year, month, day than copy on [year]/[month]/[day] directory with a file name as photo taken date.",
 					textWriter);
 
 				WriteOptionArgumentsToConsole(
 					new CopyOptions(outputFolder, NamingStyle.AddressDay, FolderProcessType.SubFoldersPreserveFolderHierarchy, NumberNamingTextStyle.AllNamesAreSameLength,
-						CopyInvalidFormatAction.PreventProcess, CopyNoPhotoTakenDateAction.InSubFolder, CopyNoCoordinateAction.InSubFolder, inputFolder, folderAppendType: FolderAppendType.DayRange,
+						CopyInvalidFormatAction.PreventProcess, CopyNoPhotoTakenDateAction.InSubFolder, CopyNoCoordinateAction.InSubFolder, CopyNoDeviceAction.Continue, CopyNoAuthorAction.Continue, inputFolder, folderAppendType: FolderAppendType.DayRange,
 						folderAppendLocationType: FolderAppendLocationType.Prefix, reverseGeoCodeProvider: ReverseGeocodeProvider.GoogleMaps,
 						googleMapsAddressTypes: new[] { "administrative_area_level_1", "administrative_area_level_2", "administrative_area_level_3" }, googleMapsApiKey: "google-api-key"),
 					"Adding day range as a prefix to existing folder names and photos copied with a file name as address and day.",
@@ -69,14 +69,14 @@ public static class HelpTextBuilder
 
 				WriteOptionArgumentsToConsole(
 					new CopyOptions(outputFolder, NamingStyle.AddressDateTimeWithSeconds, FolderProcessType.SubFoldersPreserveFolderHierarchy, NumberNamingTextStyle.AllNamesAreSameLength,
-						CopyInvalidFormatAction.PreventProcess, CopyNoPhotoTakenDateAction.InSubFolder, CopyNoCoordinateAction.InSubFolder, inputFolder, reverseGeoCodeProvider: ReverseGeocodeProvider.OpenStreetMapFoundation,
+						CopyInvalidFormatAction.PreventProcess, CopyNoPhotoTakenDateAction.InSubFolder, CopyNoCoordinateAction.InSubFolder, CopyNoDeviceAction.Continue, CopyNoAuthorAction.Continue, inputFolder, reverseGeoCodeProvider: ReverseGeocodeProvider.OpenStreetMapFoundation,
 						openStreetMapProperties: new[] { "country", "city", "town", "suburb" }),
 					"Preserve same folder hierarchy, copy photos with a file name as photo taken date, time and address. Possible file name will have number suffix. Photos that don't have any coordinate or photo taken date will be copied in a relative subfolder.",
 					textWriter);
 
 				WriteOptionArgumentsToConsole(
 					new CopyOptions(outputFolder, NamingStyle.DayAddress, FolderProcessType.FlattenAllSubFolders, NumberNamingTextStyle.OnlySequentialNumbers,
-						CopyInvalidFormatAction.PreventProcess, CopyNoPhotoTakenDateAction.Continue, CopyNoCoordinateAction.InSubFolder, inputFolder, groupByFolderType: GroupByFolderType.AddressHierarchy,
+						CopyInvalidFormatAction.PreventProcess, CopyNoPhotoTakenDateAction.Continue, CopyNoCoordinateAction.InSubFolder, CopyNoDeviceAction.Continue, CopyNoAuthorAction.Continue, inputFolder, groupByFolderType: GroupByFolderType.AddressHierarchy,
 						reverseGeoCodeProvider: ReverseGeocodeProvider.BigDataCloud, bigDataCloudAdminLevels: new[] { 2, 4, 6, 8 }),
 					"Groups photos by photo taken year, month, day than copy on [year]/[month]/[day] directory with a file name as photo taken date. Photos that don't have any coordinate will be copied in a relative subfolder.",
 					textWriter);

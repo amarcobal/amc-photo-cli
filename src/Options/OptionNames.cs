@@ -65,6 +65,10 @@ internal static class OptionNames
 	internal const char CopyNoCoordinateActionOptionNameShort = NoCoordinateActionOptionNameShort;
 	internal const string CopyNoCoordinateActionOptionNameLong = NoCoordinateActionOptionNameLong;
 
+	internal const string CopyNoDeviceActionOptionNameLong = NoDeviceActionOptionNameLong;
+
+	internal const string CopyNoAuthorActionOptionNameLong = NoAuthorActionOptionNameLong;
+
 	internal const char CopyInvalidFormatActionOptionNameShort = InvalidFormatActionOptionNameShort;
 	internal const string CopyInvalidFormatActionOptionNameLong = InvalidFormatActionOptionNameLong;
 
@@ -169,6 +173,10 @@ internal static class OptionNames
 
 	private const char NoCoordinateActionOptionNameShort = 'c';
 	private const string NoCoordinateActionOptionNameLong = "no-coordinate";
+
+	private const string NoDeviceActionOptionNameLong = "no-device";
+
+	private const string NoAuthorActionOptionNameLong = "no-author";
 
 	private const char InvalidFormatActionOptionNameShort = 'x';
 	private const string InvalidFormatActionOptionNameLong = "invalid-format";

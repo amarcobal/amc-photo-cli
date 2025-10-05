@@ -22,6 +22,7 @@ public class ToolOptions
 	internal const string NoAuthorAndPhotoTakenDateFolderNameDefault = "no-author-and-no-photo-taken-date";
 	internal const string NoDeviceAndPhotoTakenDateFolderNameDefault = "no-device-and-no-photo-taken-date";
 	internal const string NoAuthorAndDeviceAndPhotoTakenDateFolderNameDefault = "no-author-and-no-device-and-no-photo-taken-date";
+	internal const string NoAuthorAndDeviceFolderNameDefault = "no-author-and-no-device";
 	internal const string PhotoOrganizerReportCsvDefault = "photo-cli-report.csv";
 	internal const string DryRunCsvReportFileNameDefault = "photo-cli-dry-run.csv";
 	internal const string ArchivePhotoTakenDateHashSeparatorDefault = "-";
@@ -57,6 +58,7 @@ public class ToolOptions
 		NoAuthorAndPhotoTakenDateFolderName = options.NoAuthorAndPhotoTakenDateFolderName ?? NoAuthorAndPhotoTakenDateFolderNameDefault;
 		NoDeviceAndPhotoTakenDateFolderName = options.NoDeviceAndPhotoTakenDateFolderName ?? NoDeviceAndPhotoTakenDateFolderNameDefault;
 		NoAuthorAndDeviceAndPhotoTakenDateFolderName = options.NoAuthorAndDeviceAndPhotoTakenDateFolderName ?? NoAuthorAndDeviceAndPhotoTakenDateFolderNameDefault;
+		NoAuthorAndDeviceFolderName = options.NoAuthorAndDeviceFolderName ?? NoAuthorAndDeviceFolderNameDefault;
 		CsvReportFileName = options.CsvReportFileName ?? PhotoOrganizerReportCsvDefault;
 		DryRunCsvReportFileName = options.DryRunCsvReportFileName ?? DryRunCsvReportFileNameDefault;
 		ConnectionLimit = options.ConnectionLimit ?? ConnectionLimitDefault;
@@ -94,6 +96,7 @@ public class ToolOptions
 	public string NoAuthorAndPhotoTakenDateFolderName { get; set; }
 	public string NoDeviceAndPhotoTakenDateFolderName { get; set; }
 	public string NoAuthorAndDeviceAndPhotoTakenDateFolderName { get; set; }
+	public string NoAuthorAndDeviceFolderName { get; set; }
 
 	public string CsvReportFileName { get; set; }
 	public string DryRunCsvReportFileName { get; set; }

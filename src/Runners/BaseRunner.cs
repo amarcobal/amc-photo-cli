@@ -41,6 +41,7 @@ public abstract class BaseRunner
 		if (_statistics.CompanionFilesExisted > 0)
 			_consoleWriter.Write($"- {_statistics.CompanionFilesExisted} companion file(s) existed on the output.");
 
+		// --- Fecha y coordenadas ---
 		if (_statistics.PhotoThatHasTakenDateAndCoordinate > 0)
 			_consoleWriter.Write($"- {_statistics.PhotoThatHasTakenDateAndCoordinate} photo(s) has taken date and coordinate.");
 		if (_statistics.PhotoThatHasTakenDateButNoCoordinate > 0)
@@ -50,11 +51,33 @@ public abstract class BaseRunner
 		if (_statistics.PhotoThatNoCoordinateAndNoTakenDate > 0)
 			_consoleWriter.Write($"- {_statistics.PhotoThatNoCoordinateAndNoTakenDate} photo(s) has no taken date and coordinate.");
 
+		// --- Author / Device ---
+		if (_statistics.PhotoThatHasTakenDateAndDevice > 0)
+			_consoleWriter.Write($"- {_statistics.PhotoThatHasTakenDateAndDevice} photo(s) has taken date and device.");
+		if (_statistics.PhotoThatHasTakenDateButNoDevice > 0)
+			_consoleWriter.Write($"- {_statistics.PhotoThatHasTakenDateButNoDevice} photo(s) has taken date but no device.");
+
+		if (_statistics.PhotoThatHasTakenDateAndAuthor > 0)
+			_consoleWriter.Write($"- {_statistics.PhotoThatHasTakenDateAndAuthor} photo(s) has taken date and author.");
+		if (_statistics.PhotoThatHasTakenDateButNoAuthor > 0)
+			_consoleWriter.Write($"- {_statistics.PhotoThatHasTakenDateButNoAuthor} photo(s) has taken date but no author.");
+
+		if (_statistics.PhotoThatHasDeviceAndAuthor > 0)
+			_consoleWriter.Write($"- {_statistics.PhotoThatHasDeviceAndAuthor} photo(s) has device and author.");
+		if (_statistics.PhotoThatHasDeviceButNoAuthor > 0)
+			_consoleWriter.Write($"- {_statistics.PhotoThatHasDeviceButNoAuthor} photo(s) has device but no author.");
+		if (_statistics.PhotoThatHasAuthorButNoDevice > 0)
+			_consoleWriter.Write($"- {_statistics.PhotoThatHasAuthorButNoDevice} photo(s) has author but no device.");
+		if (_statistics.PhotoThatNoAuthorAndNoDevice > 0)
+			_consoleWriter.Write($"- {_statistics.PhotoThatNoAuthorAndNoDevice} photo(s) has no author and no device.");
+
+		// --- Errores ---
 		if (_statistics.InvalidFormatError > 0)
-			_consoleWriter.Write($"- {_statistics.InvalidFormatError} photo(s) has unknown/invalid format..");
+			_consoleWriter.Write($"- {_statistics.InvalidFormatError} photo(s) has unknown/invalid format.");
 		if (_statistics.InternalError > 0)
-			_consoleWriter.Write($"- {_statistics.InternalError} photo(s) caused unexpected error internally.");
+			_consoleWriter.Write($"- {_statistics.InternalError} photo(s) caused unexpected internal error.");
 	}
+
 
 	protected bool ValidatePhotoPaths(out ExitCode exitCode, IReadOnlyCollection<Photo> photoPaths, string path)
 	{
@@ -71,7 +94,8 @@ public abstract class BaseRunner
 
 	protected bool NoExifDataPreventActions(out ExitCode exitCode, bool allPhotosAreValid, bool allPhotosHasPhotoTaken, bool allPhotosHasCoordinate,
 		bool isInvalidFileFormatPreventProcessOptionSelected, bool isNoPhotoTakenDatePreventProcessOptionSelected, bool isNoCoordinatePreventProcessOptionSelected,
-		IReadOnlyCollection<Photo> exifDataByPhotoBundle, bool allPhotosHasAuthor = true, bool isNoAuthorPreventProcessOptionSelected = true)
+		IReadOnlyCollection<Photo> exifDataByPhotoBundle)
+		
 	{
 		var invalidFileFormatPreventProcess = InvalidFileFormatActionPreventProcess(allPhotosAreValid, isInvalidFileFormatPreventProcessOptionSelected, exifDataByPhotoBundle);
 		if (invalidFileFormatPreventProcess)
@@ -82,7 +106,6 @@ public abstract class BaseRunner
 
 		var noPhotoDateTimeTakenActionPreventProcess = NoPhotoTakenDateActionPreventProcess(allPhotosHasPhotoTaken, isNoPhotoTakenDatePreventProcessOptionSelected, exifDataByPhotoBundle);
 		var noCoordinateActionPreventProcess = NoCoordinateActionPreventProcess(allPhotosHasCoordinate, isNoCoordinatePreventProcessOptionSelected, exifDataByPhotoBundle);
-		var noAuthorActionPreventProcess = NoAuthorActionPreventProcess(allPhotosHasAuthor, isNoAuthorPreventProcessOptionSelected, exifDataByPhotoBundle);
 
 		if (noPhotoDateTimeTakenActionPreventProcess && noCoordinateActionPreventProcess)
 		{
@@ -99,12 +122,6 @@ public abstract class BaseRunner
 		if (noCoordinateActionPreventProcess)
 		{
 			exitCode = ExitCode.PhotosWithNoCoordinatePreventedProcess;
-			return false;
-		}
-
-		if (noAuthorActionPreventProcess)
-		{
-			exitCode = ExitCode.PhotosWithNoAuthorPreventedProcess;
 			return false;
 		}
 
@@ -142,6 +159,17 @@ public abstract class BaseRunner
 		var photosWithNoCoordinate = photos.Where(w => !w.HasCoordinate);
 		foreach (var photo in photosWithNoCoordinate)
 			_logger.LogError("No coordinate: {Path}", photo.PhotoFile.SourcePath);
+		return true;
+	}
+
+	private bool NoDeviceActionPreventProcess(bool allPhotosHasDevice, bool isPreventProcessOptionSelected, IReadOnlyCollection<Photo> photos)
+	{
+		if (allPhotosHasDevice || !isPreventProcessOptionSelected)
+			return false;
+		_logger.LogDebug("Prevented process because no device action set to prevent process");
+		var photosWithNoDevice = photos.Where(w => !w.HasDevice);
+		foreach (var photo in photosWithNoDevice)
+			_logger.LogError("No device: {Path}", photo.PhotoFile.SourcePath);
 		return true;
 	}
 
@@ -197,5 +225,29 @@ public abstract class BaseRunner
 			_logger.LogCritical(ex, "Don't have permission to create directory on {FilePath}", directory.FullName);
 			return false;
 		}
+	}
+
+	protected bool NoMediaIdentityPreventActions(out ExitCode exitCode, IReadOnlyCollection<Photo> photoBundle,
+		bool allPhotosHasDevice = true, bool allPhotosHasAuthor = true,
+		bool isNoDevicePreventProcessOptionSelected = true, bool isNoAuthorPreventProcessOptionSelected = true)
+
+	{
+		var noDeviceActionPreventProcess = NoDeviceActionPreventProcess(allPhotosHasDevice, isNoDevicePreventProcessOptionSelected, photoBundle);
+		var noAuthorActionPreventProcess = NoAuthorActionPreventProcess(allPhotosHasAuthor, isNoAuthorPreventProcessOptionSelected, photoBundle);
+
+		if (noDeviceActionPreventProcess)
+		{
+			exitCode = ExitCode.PhotosWithNoDevicePreventedProcess;
+			return false;
+		}
+
+		if (noAuthorActionPreventProcess)
+		{
+			exitCode = ExitCode.PhotosWithNoAuthorPreventedProcess;
+			return false;
+		}
+
+		exitCode = ExitCode.Unset;
+		return true;
 	}
 }

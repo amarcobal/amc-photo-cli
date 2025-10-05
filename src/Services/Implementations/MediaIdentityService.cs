@@ -26,6 +26,7 @@ public class MediaIdentityService : IMediaIdentityService
 	{
 		var author = _mediaIdentity.Authors.FirstOrDefault(a =>
 			a.Devices.Any(d =>
+				d.Device != null &&
 				d.Device.ID == deviceId &&
 				(d.From == null || takenDate >= d.From) &&
 				(d.To == null || takenDate <= d.To)));
@@ -44,19 +45,29 @@ public class MediaIdentityService : IMediaIdentityService
 
 		Device? device = null;
 
+		// 1. Buscar por serial number primero
 		if (!string.IsNullOrEmpty(serialNumber))
 		{
 			device = _mediaIdentity.Devices
-				.FirstOrDefault(d => d.SerialNumber != null && d.SerialNumber == serialNumber);
+				.FirstOrDefault(d => !string.IsNullOrEmpty(d.SerialNumber) && d.SerialNumber == serialNumber);
 		}
 
-		if (device == null)
-		{
-			device = _mediaIdentity.Devices
-				.FirstOrDefault(d =>
-					(string.IsNullOrEmpty(d.Make) || d.Make == make) &&
-					(string.IsNullOrEmpty(d.Model) || d.Model == model));
-		}
+		// 2. Buscar por Make/Model exacto
+		device = _mediaIdentity.Devices.FirstOrDefault(d =>
+		(
+			// 1️ Make principal + Model principal
+			(d.Make == make && d.Model == model) ||
+
+			// 2️ Make principal + AltModel
+			(d.Make == make && d.AltModels.Contains(model)) ||
+
+			// 3️ AltMake + Model principal
+			(d.AltMakes.Contains(make) && d.Model == model) ||
+
+			// 4️ AltMake + AltModel
+			(d.AltMakes.Contains(make) && d.AltModels.Contains(model))
+		)
+	);
 
 		return device ??= GetDefaultDevice();
 

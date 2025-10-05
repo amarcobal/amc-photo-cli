@@ -86,11 +86,20 @@ public class CopyRunner : BaseRunner, IConsoleRunner
 		var isInvalidFileFormatPreventProcessOptionSelected = _options.InvalidFileFormatAction == CopyInvalidFormatAction.PreventProcess;
 		var isNoPhotoTakenDatePreventProcessOptionSelected = _options.NoPhotoTakenDateAction == CopyNoPhotoTakenDateAction.PreventProcess;
 		var isNoCoordinatePreventProcessOptionSelected = _options.NoCoordinateAction == CopyNoCoordinateAction.PreventProcess;
+		var isNoDevicePreventProcessOptionSelected = _options.NoDeviceAction == CopyNoDeviceAction.PreventProcess;
+		var isNoAuthorPreventProcessOptionSelected = _options.NoAuthorAction == CopyNoAuthorAction.PreventProcess;
 
 		var photosWithExif = _exifDataAppenderService.ExtractExifData(photosFound, out var allPhotosAreValid, out var allPhotosHasPhotoTaken, out var allPhotosHasCoordinate, out var allPhotosHasMakeModel, out var allPhotosHasSubseconds, out var allPhotosHasOriginalFileName);
 
 		if (!NoExifDataPreventActions(out var exitCodeNoExif, allPhotosAreValid, allPhotosHasPhotoTaken, allPhotosHasCoordinate,
 			    isInvalidFileFormatPreventProcessOptionSelected, isNoPhotoTakenDatePreventProcessOptionSelected, isNoCoordinatePreventProcessOptionSelected, photosWithExif))
+		{
+			return exitCodeNoExif;
+		}
+
+		photosWithExif = _mediaIdentityAppenderService.AppendMediaIdentity(photosWithExif, out allPhotosAreValid, out var allPhotosHasAuthor, out var allPhotosHasDevice);
+
+		if (!NoMediaIdentityPreventActions(out var exitCodeNoMediaIDentity, photosWithExif, allPhotosHasDevice, allPhotosHasAuthor, isNoDevicePreventProcessOptionSelected, isNoAuthorPreventProcessOptionSelected))
 		{
 			return exitCodeNoExif;
 		}
@@ -101,14 +110,14 @@ public class CopyRunner : BaseRunner, IConsoleRunner
 			photosWithExif = await _reverseGeocodeFetcherService.Fetch(photosWithExif);
 		}
 
-		photosWithExif = _mediaIdentityAppenderService.AppendMediaIdentity(photosWithExif, out allPhotosAreValid, out var allPhotosHasAuthor, out var allPhotosHasDevice);
-
 		var invalidFileFormatGroupedInSubFolder = _options.InvalidFileFormatAction == CopyInvalidFormatAction.InSubFolder;
 		var noPhotoDateTimeTakenGroupedInSubFolder = _options.NoPhotoTakenDateAction == CopyNoPhotoTakenDateAction.InSubFolder;
 		var noReverseGeocodeGroupedInSubFolder = _options.NoCoordinateAction == CopyNoCoordinateAction.InSubFolder;
+		var noDeviceGroupedInSubFolder = _options.NoDeviceAction == CopyNoDeviceAction.InSubFolder;
+		var noAuthorGroupedInSubFolder = _options.NoAuthorAction == CopyNoAuthorAction.InSubFolder;
 
 		var groupedPhotosByRelativeDirectory = _directoryGrouperService.GroupFiles(photosWithExif, sourceFolderPath, _options.FolderProcessType, _options.GroupByFolderType,
-			invalidFileFormatGroupedInSubFolder, noPhotoDateTimeTakenGroupedInSubFolder, noReverseGeocodeGroupedInSubFolder);
+			invalidFileFormatGroupedInSubFolder, noPhotoDateTimeTakenGroupedInSubFolder, noReverseGeocodeGroupedInSubFolder, noDeviceGroupedInSubFolder, noAuthorGroupedInSubFolder);
 
 		var filteredPhotosByRelativeDirectory = new Dictionary<string, IReadOnlyCollection<Photo>>();
 
@@ -119,7 +128,7 @@ public class CopyRunner : BaseRunner, IConsoleRunner
 			_logger.LogTrace("Processing {TargetRelativeDirectory}", targetRelativeDirectoryPath);
 
 			var (filteredAndOrderedPhotos, keptPhotosNotInFilter) = _exifOrganizerService.FilterAndSortByNoActionTypes(photos,
-				_options.InvalidFileFormatAction, _options.NoPhotoTakenDateAction, _options.NoCoordinateAction, targetRelativeDirectoryPath);
+				_options.InvalidFileFormatAction, _options.NoPhotoTakenDateAction, _options.NoCoordinateAction, _options.NoDeviceAction, _options.NoAuthorAction, targetRelativeDirectoryPath);
 
 			var renamedPhotos = _fileNamerService.SetFileName(filteredAndOrderedPhotos, _options.NamingStyle, _options.NumberNamingTextStyle);
 

@@ -34,7 +34,8 @@ public enum ExitCode
 	PhotosWithInvalidFileFormatPreventedProcess = 33,
 
 	//Media identity info
-	PhotosWithNoAuthorPreventedProcess = 34,
+	PhotosWithNoDevicePreventedProcess = 34,
+	PhotosWithNoAuthorPreventedProcess = 35,
 
 	// Settings
 	PropertyNotFound = 40,

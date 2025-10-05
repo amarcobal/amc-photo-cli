@@ -8,4 +8,6 @@ public record Device
 	public string Make { get; init; } = string.Empty;
 	public string Model { get; init; } = string.Empty;
 	public string? SerialNumber { get; init; }
+	public List<string> AltMakes { get; init; } = new();
+	public List<string> AltModels { get; init; } = new();
 }

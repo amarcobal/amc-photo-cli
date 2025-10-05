@@ -31,13 +31,12 @@ public class MediaIdentityAppenderService : IMediaIdentityAppenderService
 
 			photo.SetDevice(_mediaIdentityService.GetDevice(photo));
 
-			if (photosHasDevice && photo.Device == null)
+			if (photosHasDevice && !photo.HasDevice)
 				photosHasDevice = false;
 
-			if (photo.HasDevice)
-				photo.SetAuthor(_mediaIdentityService.GetAuthor(photo));
+			photo.SetAuthor(_mediaIdentityService.GetAuthor(photo));
 
-			if (photosHasAuthor && photo.Author == null)
+			if (photosHasAuthor && !photo.HasAuthor)
 				photosHasAuthor = false;
 			
 		}

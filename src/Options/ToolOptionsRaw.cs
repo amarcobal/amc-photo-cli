@@ -25,6 +25,7 @@ public class ToolOptionsRaw
 	public string? NoAuthorAndPhotoTakenDateFolderName { get; set; }
 	public string? NoDeviceAndPhotoTakenDateFolderName { get; set; }
 	public string? NoAuthorAndDeviceAndPhotoTakenDateFolderName { get; set; }
+	public string? NoAuthorAndDeviceFolderName { get; set; }
 
 	public string? CsvReportFileName { get; set; }
 	public string? DryRunCsvReportFileName { get; set; }

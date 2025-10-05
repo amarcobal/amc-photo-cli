@@ -31,7 +31,7 @@
     },
     "AMC - Test - Copy": {
       "commandName": "Project",
-      "commandLineArgs": "copy --process-type FlattenAllSubFolders --group-by DecadeYearYearShortMonthNameYearMonthDay --naming-style DateTimeWithSubsecondsAuthorDevice --number-style OnlySequentialNumbers -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -o \"C:\\Work\\Photography\\Test\\Photo-cli\\Photo-Video\" -d"
+      "commandLineArgs": "copy --process-type FlattenAllSubFolders --group-by DecadeYearYearShortMonthNameYearMonthDay --naming-style DateTimeWithSubsecondsAuthorDevice --number-style OnlySequentialNumbers --no-device PreventProcess -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -o \"C:\\Work\\Photography\\Test\\Photo-cli\\Photo-Video\" -d"
     }
   }
 }

@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace PhotoCli.Services.Implementations;
 
 public class ExifOrganizerService : IExifOrganizerService
@@ -9,6 +11,8 @@ public class ExifOrganizerService : IExifOrganizerService
 		CopyNoPhotoTakenDateAction.DontCopyToOutput, CopyNoPhotoTakenDateAction.InSubFolder,
 		CopyNoPhotoTakenDateAction.AppendToEndOrderByFileName, CopyNoPhotoTakenDateAction.InsertToBeginningOrderByFileName
 	};
+	private readonly CopyNoDeviceAction[] _noDeviceActionsToFilter = { CopyNoDeviceAction.DontCopyToOutput, CopyNoDeviceAction.InSubFolder };
+	private readonly CopyNoAuthorAction[] _noAuthorActionsToFilter = { CopyNoAuthorAction.DontCopyToOutput, CopyNoAuthorAction.InSubFolder };
 
 	public ExifOrganizerService(ILogger<ExifOrganizerService> logger)
 	{
@@ -16,7 +20,7 @@ public class ExifOrganizerService : IExifOrganizerService
 	}
 
 	public (IReadOnlyCollection<Photo>, IReadOnlyCollection<Photo>) FilterAndSortByNoActionTypes(IReadOnlyCollection<Photo> photos, CopyInvalidFormatAction invalidFormatAction,
-		CopyNoPhotoTakenDateAction noPhotoDateTimeTakenAction, CopyNoCoordinateAction noCoordinateAction, string targetRelativeDirectoryPath)
+		CopyNoPhotoTakenDateAction noPhotoDateTimeTakenAction, CopyNoCoordinateAction noCoordinateAction, CopyNoDeviceAction noDeviceAction, CopyNoAuthorAction noAuthorAction, string targetRelativeDirectoryPath)
 	{
 		IReadOnlyCollection<Photo> filteredAndSortedInternal = photos;
 		var keptFilesNotInFilterInternal = new List<Photo>();
@@ -38,6 +42,22 @@ public class ExifOrganizerService : IExifOrganizerService
 			_logger.LogDebug("Filtered by no coordinate action: Filtered to {FilterToCount}, kept not in filter {KeptNotInFilterCount}", filteredByCoordinates.Count, keptDontHaveCoordinates.Count);
 			filteredAndSortedInternal = filteredByCoordinates;
 			keptFilesNotInFilterInternal.AddRange(keptDontHaveCoordinates);
+		}
+
+		if (_noDeviceActionsToFilter.Contains(noDeviceAction))
+		{
+			var (filteredByDevices, keptDontHaveDevices) = FilterByNoDeviceAction(filteredAndSortedInternal, noDeviceAction);
+			_logger.LogDebug("Filtered by no device action: Filtered to {FilterToCount}, kept not in filter {KeptNotInFilterCount}", filteredByDevices.Count, keptDontHaveDevices.Count);
+			filteredAndSortedInternal = filteredByDevices;
+			keptFilesNotInFilterInternal.AddRange(keptDontHaveDevices);
+		}
+
+		if (_noAuthorActionsToFilter.Contains(noAuthorAction))
+		{
+			var (filteredByAuthors, keptDontHaveAuthors) = FilterByNoAuthorAction(filteredAndSortedInternal, noAuthorAction);
+			_logger.LogDebug("Filtered by no author action: Filtered to {FilterToCount}, kept not in filter {KeptNotInFilterCount}", filteredByAuthors.Count, keptDontHaveAuthors.Count);
+			filteredAndSortedInternal = filteredByAuthors;
+			keptFilesNotInFilterInternal.AddRange(keptDontHaveAuthors);
 		}
 
 		if (_noPhotoTakenActionsToFilter.Contains(noPhotoDateTimeTakenAction))
@@ -113,6 +133,36 @@ public class ExifOrganizerService : IExifOrganizerService
 				return (withCoordinates, new List<Photo>());
 			default:
 				throw new PhotoCliException($"Not implemented {nameof(CopyNoCoordinateAction)}: {noCoordinateAction}");
+		}
+	}
+
+	private (IReadOnlyCollection<Photo>, IReadOnlyCollection<Photo>) FilterByNoDeviceAction(IReadOnlyCollection<Photo> photos, CopyNoDeviceAction noDeviceAction)
+	{
+		var withDevices = photos.Where(w => w.HasDevice).ToList();
+		var withoutDevices = photos.Where(w => !w.HasDevice).ToList();
+		switch (noDeviceAction)
+		{
+			case CopyNoDeviceAction.InSubFolder:
+				return (withDevices, withoutDevices);
+			case CopyNoDeviceAction.DontCopyToOutput:
+				return (withDevices, new List<Photo>());
+			default:
+				throw new PhotoCliException($"Not implemented {nameof(CopyNoDeviceAction)}: {noDeviceAction}");
+		}
+	}
+
+	private (IReadOnlyCollection<Photo>, IReadOnlyCollection<Photo>) FilterByNoAuthorAction(IReadOnlyCollection<Photo> photos, CopyNoAuthorAction noAuthorAction)
+	{
+		var withAuthors = photos.Where(w => w.HasAuthor).ToList();
+		var withoutAuthors = photos.Where(w => !w.HasAuthor).ToList();
+		switch (noAuthorAction)
+		{
+			case CopyNoAuthorAction.InSubFolder:
+				return (withAuthors, withoutAuthors);
+			case CopyNoAuthorAction.DontCopyToOutput:
+				return (withAuthors, new List<Photo>());
+			default:
+				throw new PhotoCliException($"Not implemented {nameof(CopyNoAuthorAction)}: {noAuthorAction}");
 		}
 	}
 

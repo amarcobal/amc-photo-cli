@@ -19,7 +19,7 @@ public class DirectoryGrouperService : IDirectoryGrouperService
 	}
 
 	public Dictionary<string, IReadOnlyCollection<Photo>> GroupFiles(IReadOnlyCollection<Photo> photos, string sourceRootPath, FolderProcessType folderProcessType,
-		GroupByFolderType? groupByFolderType, bool invalidFileFormatGroupedInSubFolder, bool noPhotoDateTimeTakenGroupedInSubFolder, bool noReverseGeocodeGroupedInSubFolder)
+		GroupByFolderType? groupByFolderType, bool invalidFileFormatGroupedInSubFolder, bool noPhotoDateTimeTakenGroupedInSubFolder, bool noReverseGeocodeGroupedInSubFolder, bool noDeviceGroupedInSubFolder, bool noAuthorGroupedInSubFolder)
 	{
 		_consoleWriter.ProgressStart(ProgressName);
 		var groupedPhotosByRelativeDirectoryInternal = new Dictionary<string, List<Photo>>();
@@ -112,6 +112,24 @@ public class DirectoryGrouperService : IDirectoryGrouperService
 					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoPhotoTakenDateFolderName);
 				else if (noReverseGeocodeShouldBeInSubFolder)
 					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoAddressFolderName);
+
+
+				var noDeviceShouldBeInSubFolder = !photo.HasDevice && noDeviceGroupedInSubFolder;
+				var noAuthorShouldBeInSubFolder = !photo.HasAuthor && noAuthorGroupedInSubFolder;
+
+				if (noDeviceShouldBeInSubFolder && noAuthorShouldBeInSubFolder && noPhotoTakenShouldBeInSubFolder)
+					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoAuthorAndDeviceAndPhotoTakenDateFolderName);
+				else if (noDeviceShouldBeInSubFolder && noAuthorShouldBeInSubFolder)
+					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoAuthorAndDeviceFolderName);
+				else if (noDeviceShouldBeInSubFolder && noPhotoTakenShouldBeInSubFolder)
+					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoDeviceAndPhotoTakenDateFolderName);
+				else if (noAuthorShouldBeInSubFolder && noPhotoTakenShouldBeInSubFolder)
+					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoAuthorAndPhotoTakenDateFolderName);
+				else if (noDeviceShouldBeInSubFolder)
+					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoDeviceFolderName);
+				else if (noAuthorShouldBeInSubFolder)
+					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoAuthorFolderName);
+
 			}
 
 			_logger.LogTrace("File ({FilePath}) target directory: {TargetRelativeDirectoryPath} ", photo.PhotoFile.SourcePath, targetRelativeDirectoryPath);

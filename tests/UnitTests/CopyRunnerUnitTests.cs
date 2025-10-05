@@ -84,11 +84,11 @@ public class CopyRunnerUnitTests
 		}
 
 		_directoryGrouperMock.Setup(s => s.GroupFiles(photos, copyOptions.InputPath!,
-				It.IsAny<FolderProcessType>(), It.IsAny<GroupByFolderType?>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()))
+				It.IsAny<FolderProcessType>(), It.IsAny<GroupByFolderType?>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()))
 			.Returns(() => groupedPhotoInfosByRelativeDirectory);
 
 		_organizeByNoPhotoTakenActionMock.Setup(s => s.FilterAndSortByNoActionTypes(photos,
-				It.IsAny<CopyInvalidFormatAction>(), It.IsAny<CopyNoPhotoTakenDateAction>(), It.IsAny<CopyNoCoordinateAction>(), It.IsAny<string>()))
+				It.IsAny<CopyInvalidFormatAction>(), It.IsAny<CopyNoPhotoTakenDateAction>(), It.IsAny<CopyNoCoordinateAction>(), It.IsAny<CopyNoDeviceAction>(), It.IsAny<CopyNoAuthorAction>(), It.IsAny<string>()))
 			.Returns(() => (photos, new List<Photo>()));
 
 		_fileNamerMock.Setup(s => s.SetFileName(photos, It.IsAny<NamingStyle>(), It.IsAny<NumberNamingTextStyle>()))
@@ -126,12 +126,12 @@ public class CopyRunnerUnitTests
 		}
 
 		_directoryGrouperMock.Verify(v => v.GroupFiles(photos, copyOptions.InputPath!,
-			It.IsAny<FolderProcessType>(), It.IsAny<GroupByFolderType?>(),It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once);
+			It.IsAny<FolderProcessType>(), It.IsAny<GroupByFolderType?>(),It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once);
 
 		var timesGroupPhotoFolderIteration = Times.Exactly(groupedPhotoInfosByRelativeDirectory.Count);
 
 		_organizeByNoPhotoTakenActionMock.Verify(v => v.FilterAndSortByNoActionTypes(photos,
-			It.IsAny<CopyInvalidFormatAction>(), It.IsAny<CopyNoPhotoTakenDateAction>(), It.IsAny<CopyNoCoordinateAction>(), It.IsAny<string>())
+			It.IsAny<CopyInvalidFormatAction>(), It.IsAny<CopyNoPhotoTakenDateAction>(), It.IsAny<CopyNoCoordinateAction>(), It.IsAny<CopyNoDeviceAction>(), It.IsAny<CopyNoAuthorAction>(), It.IsAny<string>())
 			, timesGroupPhotoFolderIteration);
 
 		_fileNamerMock.Verify(v => v.SetFileName(photos, It.IsAny<NamingStyle>(), It.IsAny<NumberNamingTextStyle>()), timesGroupPhotoFolderIteration);

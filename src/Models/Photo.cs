@@ -60,14 +60,31 @@ public record Photo
 
 	#endregion
 
+	#region Exif - Make & Model
+
+	public string? Make => ExifData?.Make;
+	public bool HasMake => !string.IsNullOrWhiteSpace(Make);
+
+	public string? Model => ExifData?.Make;
+	public bool HasModel => !string.IsNullOrWhiteSpace(Model);
+
+
+	#endregion
+
 	#endregion
 
 	#region Media Identity
 
 	public Author? Author { get; private set; }
-	public bool HasAuthor => Author != null;
+	public bool HasAuthor => Author != null && !IsDefaultAuthor;
+	public bool HasNullAuthor => Author == null;
+	public bool IsDefaultAuthor => Author?.ID.Equals(Constants.DefaultAuthor, StringComparison.OrdinalIgnoreCase) == true;
+
 	public Device? Device { get; private set; }
-	public bool HasDevice => Device != null;
+	public bool HasDevice => Device != null && !IsDefaultDevice;
+	public bool HasNullDevice => Device == null;
+	public bool IsDefaultDevice => Device?.ID.Equals(Constants.DefaultDevice, StringComparison.OrdinalIgnoreCase) == true;
+
 
 	#endregion
 

@@ -19,6 +19,10 @@ public static class HelpTexts
 
 	public const string CopyNoCoordinateAction = "(Optional) Action to do when a photo with a no coordinate. ( Continue: 0 [default], PreventProcess: 1, DontCopyToOutput: 2, InSubFolder: 3 )";
 
+	public const string CopyNoDeviceAction = "(Optional) Action to do when a photo with a no device. ( Continue: 0 [default], PreventProcess: 1, DontCopyToOutput: 2, InSubFolder: 3 )";
+
+	public const string CopyNoAuthorAction = "(Optional) Action to do when a photo with a no author. ( Continue: 0 [default], PreventProcess: 1, DontCopyToOutput: 2, InSubFolder: 3 )";
+
 	public const string CopyInvalidFormatAction = "(Optional) Action to do when a photo format is invalid. " +
 	                                              "( Continue: 0 [default], PreventProcess: 1, DontCopyToOutput: 2, InSubFolder: 3 )";
 

@@ -22,6 +22,8 @@ public class CopyOptionsValidator : BaseValidator<CopyOptions>
 
 		RuleFor(r => r.NoPhotoTakenDateAction).IsInEnum();
 		RuleFor(r => r.NoCoordinateAction).IsInEnum();
+		RuleFor(r => r.NoDeviceAction).IsInEnum();
+		RuleFor(r => r.NoAuthorAction).IsInEnum();
 
 		RuleFor(r => r.GroupByFolderType).IsInEnum().Must(m => m != GroupByFolderType.Unset);
 		RuleFor(r => r.FolderAppendType).IsInEnum().Must(m => m != FolderAppendType.Unset);

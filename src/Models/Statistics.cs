@@ -15,6 +15,22 @@ public record Statistics
 
 	public int HasCoordinateCount => PhotoThatHasTakenDateAndCoordinate + PhotoThatHasCoordinateButNoTakenDate;
 
+	public int PhotoThatHasTakenDateAndDevice { get; set; }
+	public int PhotoThatHasTakenDateButNoDevice { get; set; }
+
+	public int PhotoThatHasTakenDateAndAuthor { get; set; }
+	public int PhotoThatHasTakenDateButNoAuthor { get; set; }
+
+	public int PhotoThatHasDeviceAndAuthor { get; set; }
+	public int PhotoThatHasDeviceButNoAuthor { get; set; }
+	public int PhotoThatHasAuthorButNoDevice { get; set; }
+	public int PhotoThatNoAuthorAndNoDevice { get; set; }
+
+	public int HasDeviceCount => PhotoThatHasTakenDateAndDevice + PhotoThatHasDeviceAndAuthor + PhotoThatHasDeviceButNoAuthor;
+	public int HasAuthorCount => PhotoThatHasTakenDateAndAuthor + PhotoThatHasDeviceAndAuthor + PhotoThatHasAuthorButNoDevice;
+
+
+
 	public List<string> FileIoErrors { get; } = new();
 
 	public int InvalidFormatError { get; set; }
