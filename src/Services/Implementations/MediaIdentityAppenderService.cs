@@ -38,7 +38,30 @@ public class MediaIdentityAppenderService : IMediaIdentityAppenderService
 
 			if (photosHasAuthor && !photo.HasAuthor)
 				photosHasAuthor = false;
-			
+
+
+			//Statistics
+			// 🔹 Combinaciones con taken date
+			if (photo.HasTakenDateTime && photo.HasDevice)
+				++_statistics.PhotoThatHasTakenDateAndDevice;
+			else if (photo.HasTakenDateTime && !photo.HasDevice)
+				++_statistics.PhotoThatHasTakenDateButNoDevice;
+
+			if (photo.HasTakenDateTime && photo.HasAuthor)
+				++_statistics.PhotoThatHasTakenDateAndAuthor;
+			else if (photo.HasTakenDateTime && !photo.HasAuthor)
+				++_statistics.PhotoThatHasTakenDateButNoAuthor;
+
+			// 🔹 Combinaciones Device / Author
+			if (photo.HasDevice && photo.HasAuthor)
+				++_statistics.PhotoThatHasDeviceAndAuthor;
+			else if (photo.HasDevice && !photo.HasAuthor)
+				++_statistics.PhotoThatHasDeviceButNoAuthor;
+			else if (!photo.HasDevice && photo.HasAuthor)
+				++_statistics.PhotoThatHasAuthorButNoDevice;
+			else
+				++_statistics.PhotoThatNoAuthorAndNoDevice;
+
 		}
 
 		_consoleWriter.ProgressFinish(ProgressName);
