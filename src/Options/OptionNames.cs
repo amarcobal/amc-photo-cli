@@ -113,13 +113,20 @@ internal static class OptionNames
 
 	#endregion
 
+	#region Metadata Options
+
+	internal const string MetadataVerb = "metadata";
+
+	internal const char OperationOptionNameShort = 'o';
+	internal const string OperationOptionNameLong = "operation";
+
+	internal const char TemplateOptionNameShort = 't';
+	internal const string TemplateOptionNameLong = "template";
+
+	#endregion
+
+
 	#region Settings Options
-
-	internal const char KeyOptionNameShort = 'k';
-	internal const string KeyOptionNameLong = "key";
-
-	internal const char ValueOptionNameShort = 'v';
-	internal const string ValueOptionNameLong = "value";
 
 	internal const char ResetOptionNameShort = 'r';
 	internal const string ResetOptionNameLong = "reset";
@@ -133,6 +140,9 @@ internal static class OptionNames
 
 	internal const char InputPathOptionNameShort = 'i';
 	internal const string InputPathOptionNameLong = "input";
+
+	internal const char InputFilesOptionNameShort = 'y';
+	internal const string InputFilesOptionNameLong = "input-files";
 
 	internal const char IsDryRunOptionNameShort = 'd';
 	internal const string IsDryRunOptionNameLong = "dry-run";
@@ -163,6 +173,16 @@ internal static class OptionNames
 
 	internal const char LanguageOptionNameShort = 'l';
 	internal const string LanguageOptionNameLong = "language";
+
+	#region Shared Settings & Metadata Options
+
+	internal const char KeyOptionNameShort = 'k';
+	internal const string KeyOptionNameLong = "key";
+
+	internal const char ValueOptionNameShort = 'v';
+	internal const string ValueOptionNameLong = "value";
+
+	#endregion
 
 	#endregion
 

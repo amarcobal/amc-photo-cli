@@ -78,6 +78,21 @@ public static class HelpTexts
 
 	#endregion
 
+	#region Metadata
+
+	public const string MetadataOperation = "(MUST) Operation to perform for photo metadata. ( Add: 1, Get: 2, Remove: 3, Check: 4 )";
+
+	public const string MetadataKey = "(Optional) Metadata key to add, get, or remove. ( e.g. 'Make', 'Model', 'Author' )";
+
+	public const string MetadataValue = "(Optional) Metadata value to assign for the given key. ( Used with '--key' )";
+
+	public const string MetadataTemplate = "(Optional) Template name to apply or check. ( e.g. 'AMC-Basic-Metadata' )";
+
+	public const string InputFiles = "(Optional) Specific file paths to process. ( Alternative to '--input' )";
+
+	#endregion
+
+
 	#region Shared
 
 	public const string InputPath = "(Default current executing folder) File system path to read & copy photos from. ( there will be no modification on the input path )";
