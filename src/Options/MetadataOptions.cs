@@ -7,7 +7,7 @@ public class MetadataOptions
 {
 	public MetadataOptions(
 		// Required
-		MetadataOperation operation,
+		MetadataOperation operation, FolderProcessType folderProcessType,
 		// Optional
 		string? inputPath = null,
 		IEnumerable<string>? inputFiles = null,
@@ -17,6 +17,7 @@ public class MetadataOptions
 		bool isDryRun = false)
 	{
 		Operation = operation;
+		FolderProcessType = folderProcessType;
 		InputPath = inputPath;
 		InputFiles = inputFiles ?? new List<string>();
 		Key = key;
@@ -29,6 +30,9 @@ public class MetadataOptions
 
 	[Option(OptionNames.OperationOptionNameShort, OptionNames.OperationOptionNameLong, HelpText = HelpTexts.MetadataOperation)]
 	public MetadataOperation Operation { get; }
+
+	[Option(OptionNames.FolderProcessTypeOptionNameShort, OptionNames.FolderProcessTypeOptionNameLong, HelpText = HelpTexts.FolderProcessType)]
+	public FolderProcessType FolderProcessType { get; }
 
 	#endregion
 

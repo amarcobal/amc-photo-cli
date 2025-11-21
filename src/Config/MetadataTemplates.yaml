@@ -1,0 +1,227 @@
+Templates:
+  AMC-Basic-Metadata:
+    
+    ############################################################
+    # 1. IDENTITY (Who/What created the content)
+    ############################################################
+
+    # --- Author (The person) ---
+    - Name: XMP:AMC:Identity:Author:ID
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorID 
+
+    - Name: XMP:AMC:Identity:Author:Alias
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorAlias
+
+    - Name: XMP:AMC:Identity:Author:Name
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorName
+
+    # --- Device (The hardware) ---
+    - Name: XMP:AMC:Identity:Device:ID
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: DeviceID
+
+    - Name: XMP:AMC:Identity:Device:Alias
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: DeviceAlias
+
+    - Name: XMP:AMC:Identity:Device:Name
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: DeviceName
+        
+    ############################################################
+    # 2. ORIGIN (The immutable "backup" of the original state)
+    ############################################################
+    
+    - Name: XMP:AMC:Origin:OriginalFileName
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalFileName 
+
+    - Name: XMP:AMC:Origin:OriginalDateTime
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime 
+
+    - Name: XMP:AMC:Origin:OriginalSubseconds
+      Required: false
+      Source: 
+        Type: Variable
+        ValueKey: OriginalSubseconds
+        
+    ############################################################
+    # 5. STANDARD TAGS SYNC (Industry Compatibility)
+    ############################################################
+    
+    # --- Standard Author (Source: MyAuthorName Composite Tag) ---
+    - Name: Creator
+      Required: true
+      Source: 
+        Type: ExifToolTag
+        ValueKey: XMP:AMC:Identity:Author:Name 
+
+    # --- Standard Original Filename (Source: FileName system tag) ---
+    - Name: IPTC:PreservedFileName 
+      Required: true
+      Source: 
+        Type: ExifToolTag
+        ValueKey: XMP:AMC:Origin:OriginalFileName 
+
+    - Name: XMP:OriginalFileName  
+      Required: true
+      Source: 
+        Type: ExifToolTag
+        ValueKey: XMP:AMC:Origin:OriginalFileName 
+
+    - Name: XMP-xmpMM:PreservedFileName
+      Required: true
+      Source: 
+        Type: ExifToolTag
+        ValueKey: XMP:AMC:Origin:OriginalFileName
+
+
+  AMC-WOF-Ingest:
+    
+    ############################################################
+    # 1. IDENTITY (Who/What created the content)
+    ############################################################
+
+    # --- Author (The person) ---
+    - Name: XMP:AMC:Identity:Author:ID
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorID 
+
+    - Name: XMP:AMC:Identity:Author:Alias
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorAlias
+
+    - Name: XMP:AMC:Identity:Author:Name
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorName
+
+    # --- Device (The hardware) ---
+    - Name: XMP:AMC:Identity:Device:ID
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: DeviceID
+
+    - Name: XMP:AMC:Identity:Device:Alias
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: DeviceAlias
+
+    - Name: XMP:AMC:Identity:Device:Name
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: DeviceName
+        
+    ############################################################
+    # 2. ORIGIN (The immutable "backup" of the original state)
+    ############################################################
+    
+    - Name: XMP:AMC:Origin:OriginalFileName
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalFileName 
+
+    - Name: XMP:AMC:Origin:OriginalDateTime
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime 
+
+    - Name: XMP:AMC:Origin:OriginalSubseconds
+      Required: false
+      Source: 
+        Type: Variable
+        ValueKey: OriginalSubseconds
+
+    ############################################################
+    # 3. WORKFLOW (What processing has been applied)
+    ############################################################
+
+    - Name: XMP:AMC:Workflow:Ingest:DerivedFileName
+      Required: false
+      Source: 
+        Type: Variable
+        ValueKey: DerivedFileName
+
+    - Name: XMP:AMC:Workflow:Ingest:DerivedFolderPath
+      Required: false
+      Source: 
+        Type: Variable
+        ValueKey: DerivedFolderPath
+
+    ############################################################
+    # 4. EVENT (What the content is about)
+    ############################################################
+    - Name: XMP:AMC:Event:Name
+      Required: false
+      Source: 
+        Type: Variable
+        ValueKey: MyAlbum 
+        
+    ############################################################
+    # 5. STANDARD TAGS SYNC (Industry Compatibility)
+    ############################################################
+    
+    # --- Standard Author (Source: MyAuthorName Composite Tag) ---
+    - Name: Creator
+      Required: true
+      Source: 
+        Type: ExifToolTag
+        ValueKey: XMP:AMC:Identity:Author:Name 
+
+    # --- Standard Original Filename (Source: FileName system tag) ---
+    - Name: IPTC:PreservedFileName 
+      Required: true
+      Source: 
+        Type: ExifToolTag
+        ValueKey: XMP:AMC:Origin:OriginalFileName 
+
+    - Name: XMP:OriginalFileName  
+      Required: true
+      Source: 
+        Type: ExifToolTag
+        ValueKey: XMP:AMC:Origin:OriginalFileName 
+
+    - Name: XMP-xmpMM:PreservedFileName
+      Required: true
+      Source: 
+        Type: ExifToolTag
+        ValueKey: XMP:AMC:Origin:OriginalFileName
+  
+      
+  AMC-Advanced-Metadata:
+    - Name: XMP:DC:Rights
+      Required: true # Requerido para un template avanzado
+    - Name: XMP:DC:Subject
+      Required: false # Opcional, pero se fomenta su uso
+    - Name: XMP:Iptc4xmpExt:PersonInImage
+      Required: false

@@ -155,7 +155,7 @@ namespace PhotoCli.Services.Implementations
 				}
 
 				// Solo usamos los campos que tu ExifData acepta
-				return new ExifData(photoTaken, coordinate, _options.AddressSeparator, make, model, serialNumber, subSeconds, originalFileName);
+				return new ExifData(photoTaken, coordinate, _options.AddressSeparator, make, model, serialNumber, subSeconds, originalFileName, metadata);
 			}
 			catch (Exception ex)
 			{

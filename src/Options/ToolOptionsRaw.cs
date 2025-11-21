@@ -40,7 +40,8 @@ public class ToolOptionsRaw
 	public string[]? SupportedExtensions { get; set; }
 	public string[]? CompanionExtensions { get; set; }
 
-	public string AuthorsYaml { get; set; }
-	public string DevicesYaml { get; set; }
-	public string ExifToolFileConfig { get; set; }
+	public string? AuthorsYaml { get; set; }
+	public string? DevicesYaml { get; set; }
+	public string? MetadataTemplatesYaml { get; set; }
+	public string? ExifToolFileConfig { get; set; }
 }

@@ -6,12 +6,14 @@ public class MetadataOptionsValidator : BaseValidator<MetadataOptions>
 {
 	public MetadataOptionsValidator()
 	{
-		// Operation must be set
+		// --- Operation ---
 		RuleFor(r => r.Operation)
 			.IsInEnum()
-			.WithMessage(r => Required(nameof(MetadataOptions.Operation), OptionNames.OperationOptionNameLong, OptionNames.OperationOptionNameShort));
+			.WithMessage(r => Required(nameof(MetadataOptions.Operation),
+				OptionNames.OperationOptionNameLong,
+				OptionNames.OperationOptionNameShort));
 
-		// Must use either InputPath or InputFiles, but not both
+		// --- InputPath / InputFiles mutual exclusion ---
 		When(r => r.InputPath is not null && r.InputFiles.Any(), () =>
 		{
 			RuleFor(r => r.InputPath)
@@ -23,6 +25,7 @@ public class MetadataOptionsValidator : BaseValidator<MetadataOptions>
 				.WithMessage(r => CantUseMessage(nameof(MetadataOptions.InputFiles), nameof(MetadataOptions.InputPath)));
 		});
 
+		// Require one of them
 		When(r => r.InputPath is null && !r.InputFiles.Any(), () =>
 		{
 			RuleFor(r => r.InputPath)
@@ -30,32 +33,52 @@ public class MetadataOptionsValidator : BaseValidator<MetadataOptions>
 				.WithMessage("Either --input or --input-files must be provided.");
 		});
 
-		// Key and Value validation depending on Operation
-		When(r => r.Operation is MetadataOperation.Add or MetadataOperation.Remove, () =>
-		{
-			RuleFor(r => r.Key)
-				.NotEmpty()
-				.WithMessage(r => MustUseMessage(nameof(MetadataOptions.Key), r.Operation.ToString(),
-					OptionNames.KeyOptionNameLong, OptionNames.KeyOptionNameShort));
+		// --- Rules per operation ---
 
-			RuleFor(r => r.Value)
-				.NotEmpty()
-				.When(r => r.Operation == MetadataOperation.Add)
-				.WithMessage(r => MustUseMessage(nameof(MetadataOptions.Value), r.Operation.ToString(),
-					OptionNames.ValueOptionNameLong, OptionNames.ValueOptionNameShort));
+		// ADD ----------------------------------------------------------------
+		When(r => r.Operation == MetadataOperation.Add, () =>
+		{
+			RuleFor(r => new { r.Key, r.Value, r.Template })
+				.Must(x =>
+					(!string.IsNullOrWhiteSpace(x.Key) && !string.IsNullOrWhiteSpace(x.Value) && string.IsNullOrWhiteSpace(x.Template)) // key/value pair
+					|| (string.IsNullOrWhiteSpace(x.Key) && string.IsNullOrWhiteSpace(x.Value) && !string.IsNullOrWhiteSpace(x.Template)) // template
+				)
+				.WithMessage("For 'add', you must specify either --key and --value together, or --template, but not both or partial.");
 		});
 
-		When(r => r.Operation is MetadataOperation.Get or MetadataOperation.Check, () =>
+		// GET ----------------------------------------------------------------
+		When(r => r.Operation == MetadataOperation.Get, () =>
 		{
-			RuleFor(r => r.Key)
-				.Null()
-				.WithMessage(r => CantUseMessage(nameof(MetadataOptions.Key), r.Operation.ToString()));
-
-			RuleFor(r => r.Value)
-				.Null()
-				.WithMessage(r => CantUseMessage(nameof(MetadataOptions.Value), r.Operation.ToString()));
+			RuleFor(r => new { r.Key, r.Template, r.Value })
+				.Must(x =>
+					(!string.IsNullOrWhiteSpace(x.Key) && string.IsNullOrWhiteSpace(x.Template) && string.IsNullOrWhiteSpace(x.Value)) // single key
+					|| (string.IsNullOrWhiteSpace(x.Key) && !string.IsNullOrWhiteSpace(x.Template) && string.IsNullOrWhiteSpace(x.Value)) // template
+				)
+				.WithMessage("For 'get', you must specify either --key or --template (but not both), and --value is not allowed.");
 		});
 
-		// Template and IsDryRun are optional, no validation needed
+		// DELETE --------------------------------------------------------------
+		When(r => r.Operation == MetadataOperation.Delete, () =>
+		{
+			RuleFor(r => new { r.Key, r.Template, r.Value })
+				.Must(x =>
+					(!string.IsNullOrWhiteSpace(x.Key) && string.IsNullOrWhiteSpace(x.Template) && string.IsNullOrWhiteSpace(x.Value)) // single key
+					|| (string.IsNullOrWhiteSpace(x.Key) && !string.IsNullOrWhiteSpace(x.Template) && string.IsNullOrWhiteSpace(x.Value)) // template
+				)
+				.WithMessage("For 'delete', you must specify either --key or --template (but not both), and --value is not allowed.");
+		});
+
+		// CHECK ---------------------------------------------------------------
+		When(r => r.Operation == MetadataOperation.Check, () =>
+		{
+			RuleFor(r => new { r.Key, r.Template, r.Value })
+				.Must(x =>
+					(!string.IsNullOrWhiteSpace(x.Key) && string.IsNullOrWhiteSpace(x.Template) && string.IsNullOrWhiteSpace(x.Value)) // single key
+					|| (string.IsNullOrWhiteSpace(x.Key) && !string.IsNullOrWhiteSpace(x.Template) && string.IsNullOrWhiteSpace(x.Value)) // template
+				)
+				.WithMessage("For 'check', you must specify either --key or --template (but not both), and --value is not allowed.");
+		});
+
+		// Template y DryRun son opcionales fuera de esas condiciones
 	}
 }

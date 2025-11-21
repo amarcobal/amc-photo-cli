@@ -109,6 +109,18 @@ public static class Program
 				host = BuildHost<SettingsRunner, SettingsOptions>(settingsOptions, textWriter);
 				break;
 			}
+			case MetadataOptions metadataOptions:
+			{
+				var validationResultMetadata = new MetadataOptionsValidator().Validate(metadataOptions);
+				if (!validationResultMetadata.IsValid)
+				{
+					WriteErrorOutputValidationErrors(validationResultMetadata, textWriter);
+					return ReturnExitCode(ExitCode.MetadataOptionsValidationFailed);
+				}
+
+				host = BuildHost<MetadataRunner, MetadataOptions>(metadataOptions, textWriter);
+				break;
+			}
 			default:
 				throw new PhotoCliException($"Not defined: {baseOptions}");
 		}
@@ -273,6 +285,8 @@ public static class Program
 			services.AddTransient<IMediaIdentityService, MediaIdentityService>();
 			services.AddTransient<IReverseGeocodeService, ReverseGeocodeService>();
 			services.AddTransient<IReverseGeocodeFetcherService, ReverseGeocodeFetcherService>();
+			services.AddTransient<IMetadataService, MetadataService>();
+			services.AddTransient<IMetadataConfigurationService, MetadataConfigurationService>();
 			services.AddTransient<IValidator<ToolOptions>, ToolOptionsValidator>();
 			services.AddTransient<IDuplicatePhotoRemoveService, DuplicatePhotoRemoveService>();
 			services.AddTransient<IDbService, DbService>();
@@ -290,7 +304,7 @@ public static class Program
 
 	private static bool ParseArgs(IReadOnlyList<string> args, TextWriter textWriter, out object parsedObject, out ExitCode exitCode)
 	{
-		var commandLineArgsParsed = Parser.Default.ParseArguments<CopyOptions, InfoOptions, ArchiveOptions, AddressOptions, SettingsOptions>(args);
+		var commandLineArgsParsed = Parser.Default.ParseArguments<CopyOptions, InfoOptions, ArchiveOptions, AddressOptions, SettingsOptions, MetadataOptions>(args);
 		if (commandLineArgsParsed.Tag == ParserResultType.NotParsed)
 		{
 			var notParsedResult = (NotParsed<object>)commandLineArgsParsed;

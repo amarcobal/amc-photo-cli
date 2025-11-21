@@ -40,4 +40,7 @@ public record Statistics
 
 	public int CompanionFilesCopied { get; set; }
 	public int CompanionFilesExisted { get; set; }
+
+	public int PhotosMetadataProcessed { get; set; }
+	public int PhotosMetadataRemoved { get; set; }
 }

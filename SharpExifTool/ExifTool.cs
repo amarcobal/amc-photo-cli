@@ -140,7 +140,11 @@ namespace SharpExifTool
             return 0;
         }
 
-        public Task<ICollection<KeyValuePair<string, string>>> ExtractAllMetadataAsync(string filename, params string[] args)
+		#region Commands
+
+		#region GET
+
+		public Task<ICollection<KeyValuePair<string, string>>> ExtractAllMetadataAsync(string filename, params string[] args)
         {
             return Task.FromResult(ExtractAllMetadata(filename, args));
         }
@@ -178,12 +182,95 @@ namespace SharpExifTool
             return result;
         }
 
-        public Task<int> RemoveAllMetadataAsync(string filename, bool overwriteOriginal = false)
+		public Task<ICollection<KeyValuePair<string, string>>> GetMetadataAsync(string filename, string[] keys)
+		{
+			return Task.FromResult(GetMetadata(filename, keys));
+		}
+
+		public ICollection<KeyValuePair<string, string>> GetMetadata(string filename, params string[] keys)
+		{
+			if (keys == null || keys.Length == 0)
+				throw new ArgumentException("At least one key must be provided.", nameof(keys));
+
+			// Construimos el comando con todos los tags solicitados
+			var commands = keys.Select(k => $"-{k}").ToList();
+			commands.Add(filename);
+
+			Execute(commands);
+
+			var result = new List<KeyValuePair<string, string>>();
+
+			while (true)
+			{
+				var line = _reader.ReadLine();
+				if (line == null)
+					break;
+				if (line.StartsWith("{ready"))
+					break;
+
+				if (line.Length > 1 && line[0] == '-')
+				{
+					int eq = line.IndexOf('=');
+					if (eq > 1)
+					{
+						string key = line.Substring(1, eq - 1);
+						string value = line.Substring(eq + 1).Trim();
+						result.Add(new KeyValuePair<string, string>(key, value));
+					}
+				}
+			}
+
+			// Aseguramos que todos los keys pedidos están en la colección,
+			// incluso si no fueron devueltos por ExifTool
+			foreach (var key in keys)
+			{
+				if (!result.Any(kv => kv.Key.Equals(key, StringComparison.OrdinalIgnoreCase)))
+					result.Add(new KeyValuePair<string, string>(key, string.Empty));
+			}
+
+			return result;
+		}
+
+		#endregion
+
+		#region WRITE
+
+		public Task<int> WriteTagsAsync(string filename, ICollection<KeyValuePair<string, string>> properties, bool overwriteOriginal = false)
+		{
+			return Task.FromResult(WriteTags(filename, properties, overwriteOriginal));
+		}
+		public int WriteTags(string filename, ICollection<KeyValuePair<string, string>> properties, bool overwriteOriginal = false)
+		{
+			var commands = new List<string> { };
+
+			foreach (var property in properties)
+			{
+				commands.Add($"-{property.Key}={property.Value}");
+			}
+
+			if (overwriteOriginal)
+				commands.Add("-overwrite_original");
+
+			commands.Add(filename);
+
+			Execute(commands);
+
+			var line = _reader.ReadLine();
+			Debug.WriteLine(line);
+
+			return 0;
+		}
+
+		#endregion
+
+		#region DELETE
+
+		public Task<int> DeleteAllMetadataAsync(string filename, bool overwriteOriginal = false)
         {
-            return Task.FromResult(RemoveAllMetadata(filename, overwriteOriginal));
+            return Task.FromResult(DeleteAllMetadata(filename, overwriteOriginal));
         }
 
-        public int RemoveAllMetadata(string filename, bool overwriteOriginal = false)
+        public int DeleteAllMetadata(string filename, bool overwriteOriginal = false)
         {
             WriteTags(
                 filename, 
@@ -193,35 +280,45 @@ namespace SharpExifTool
             return 0;
         }
 
-        public Task<int> WriteTagsAsync(string filename, ICollection<KeyValuePair<string, string>> properties, bool overwriteOriginal = false)
-        {
-            return Task.FromResult(WriteTags(filename, properties, overwriteOriginal));
-        }
-        public int WriteTags(string filename, ICollection<KeyValuePair<string, string>> properties, bool overwriteOriginal = false)
-        {
-            var commands = new List<string> { };
+		public Task<int> DeleteTagAsync(string filename, ICollection<string> tags, bool overwriteOriginal = false)
+		{
+			return Task.FromResult(DeleteTag(filename, tags, overwriteOriginal));
+		}
 
-            foreach(var  property in properties)
-            {
-                commands.Add($"-{property.Key}={property.Value}");
-            }
+		public int DeleteTag(string filename, ICollection<string> tags, bool overwriteOriginal = false)
+		{
+			if (tags == null || tags.Count == 0)
+				throw new ArgumentException("At least one tag must be provided to remove metadata.", nameof(tags));
 
-            if (overwriteOriginal)
-                commands.Add("-overwrite_original");
+			var commands = new List<string>();
 
-            commands.Add(filename);
+			foreach (var tag in tags)
+			{
+				// ExifTool syntax to delete a specific tag
+				commands.Add($"-{tag}=");
+			}
 
-            Execute(commands);
+			if (overwriteOriginal)
+				commands.Add("-overwrite_original");
 
-            var line = _reader.ReadLine();
-            Debug.WriteLine(line);
+			commands.Add(filename);
 
-            return 0;
-        }
+			Execute(commands);
 
-        #region IDisposable Support
+			// Leer una línea opcional de salida (similar a WriteTags)
+			var line = _reader.ReadLine();
+			Debug.WriteLine(line);
 
-        private void Dispose(bool disposing)
+			return 0;
+		}
+
+		#endregion
+
+		#endregion
+
+		#region IDisposable Support
+
+		private void Dispose(bool disposing)
         {
             if (_processExifTool == null) 
                 return;

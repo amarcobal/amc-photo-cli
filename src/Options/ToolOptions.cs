@@ -32,6 +32,7 @@ public class ToolOptions
 	public static readonly string[] CompanionExtensionsDefault = [ "mov" ];
 	internal const string? AuthorsYamlDefault = "";
 	internal const string? DevicesYamlDefault = "";
+	internal const string? MetadataTemplatesYamlDefault = "";
 	internal const string? ExifToolFileConfigDefault = "";
 
 
@@ -71,6 +72,7 @@ public class ToolOptions
 		CompanionExtensions = options.CompanionExtensions ?? CompanionExtensionsDefault;
 		AuthorsYaml = options.AuthorsYaml;
 		DevicesYaml = options.DevicesYaml;
+		MetadataTemplatesYaml = options.MetadataTemplatesYaml;
 		ExifToolFileConfig = options.ExifToolFileConfig;
 	}
 
@@ -112,6 +114,8 @@ public class ToolOptions
 
 	public string? AuthorsYaml { get; set; }
 	public string? DevicesYaml { get; set; }
+
+	public string? MetadataTemplatesYaml { get; set; }
 	public string? ExifToolFileConfig { get; set; }
 
 	public static ToolOptions Default()

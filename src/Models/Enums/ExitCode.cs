@@ -4,6 +4,7 @@ public enum ExitCode
 {
 	Unset = -1,
 	Success = 0,
+	Error = 999,
 
 	// Initializing
 	ParseArgsFailed = 1,
@@ -16,6 +17,7 @@ public enum ExitCode
 	CopyOptionsValidationFailed = 13,
 	SettingsOptionsValidationFailed = 14,
 	ArchiveOptionsValidationFailed = 15,
+	MetadataOptionsValidationFailed = 16,
 
 	// File system
 	InputFolderNotExists = 20,
@@ -40,4 +42,9 @@ public enum ExitCode
 	// Settings
 	PropertyNotFound = 40,
 	InvalidSettingsValue = 41,
+
+	// Metadata
+	MetadataPropertyNotFound = 50,
+	InvalidMetadataOperationValue = 51,
+	MetadataTemplateNotFound = 52,
 }
