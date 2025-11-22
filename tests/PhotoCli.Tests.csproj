@@ -29,7 +29,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\src\PhotoCli.csproj" />
+        <ProjectReference Include="..\src\PhotoCli.Core\PhotoCli.Core.csproj" />
+        <ProjectReference Include="..\src\PhotoCli.Console\PhotoCli.Console.csproj" />
     </ItemGroup>
 
     <ItemGroup>

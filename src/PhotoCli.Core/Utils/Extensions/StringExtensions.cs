@@ -1,0 +1,29 @@
+using System.Diagnostics.CodeAnalysis;
+
+namespace PhotoCli.Core.Utils.Extensions;
+
+public static class StringExtensions
+{
+	public static string RemoveFirst(this string text, string search)
+	{
+		return ReplaceFirst(text, search, string.Empty);
+	}
+
+	public static string ReplaceFirst(this string text, string search, string replace)
+	{
+		var index = text.IndexOf(search, StringComparison.Ordinal);
+		if (index < 0)
+			return text;
+		return text[..index] + replace + text[(index + search.Length)..];
+	}
+
+	public static bool IsPresent([NotNullWhen(true)]this string? value)
+	{
+		return !string.IsNullOrEmpty(value);
+	}
+
+	public static bool IsMissing([NotNullWhen(false)]this string? value)
+	{
+		return string.IsNullOrEmpty(value);
+	}
+}
