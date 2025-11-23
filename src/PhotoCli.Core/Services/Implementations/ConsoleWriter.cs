@@ -1,11 +1,13 @@
-namespace PhotoCli.Core.Services.Implementations;
-
-using Spectre.Console; // Añadido para usar los componentes avanzados de CLI
-using System.IO;
-using System.Threading;
-using System.Collections.Generic;
 using PhotoCli.Core.Services.Contracts;
+using Spectre.Console; // Añadido para usar los componentes avanzados de CLI
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
 using Microsoft.Extensions.Logging;
+
+namespace PhotoCli.Core.Services.Implementations;
 
 public class ConsoleWriter : IConsoleWriter
 {
@@ -27,10 +29,16 @@ public class ConsoleWriter : IConsoleWriter
 
 	public void Write(string value)
 	{
-		// Para la escritura simple, seguimos usando el TextWriter, pero podemos usar SC
-		// para asegurar la compatibilidad con el entorno de la terminal.
+		// Para la escritura simple, usamos Spectre.Console para renderizar el marcado.
+		// Nota: El EscapeMarkup ya se debería haber realizado en el servicio de llamada
+		// pero se incluye aquí por seguridad si la cadena no viene del logger.
 		AnsiConsole.MarkupLine(value.EscapeMarkup());
 	}
+
+	public void WriteMarkup(string markup) 
+    {
+        AnsiConsole.MarkupLine(markup);
+    }
 
 	public void WriteError(string value)
 	{
@@ -44,7 +52,10 @@ public class ConsoleWriter : IConsoleWriter
 	public void WriteValidationTable(IEnumerable<string> headers, IEnumerable<List<string>> rows, string title)
 	{
 		var table = new Table()
-			.Title($"[bold underline brightyellow]{title}[/]")
+			.Title($"[bold underline yellow]{title}[/]")
+
+			// Asegura que el borde dibuje líneas horizontales entre filas.
+			.Border(TableBorder.Rounded)
 			.BorderColor(Color.Grey);
 
 		// Añadir las columnas
@@ -60,13 +71,18 @@ public class ConsoleWriter : IConsoleWriter
 
 			for (int i = 0; i < rowData.Count; i++)
 			{
-				var cell = rowData[i].EscapeMarkup();
+				var cell = rowData[i];
+
 				if (i == 1) // Columna 'Status'
 				{
-					if (cell.Contains("✅ OK"))
-						styledCells.Add($"[bold green]{cell}[/]");
-					else if (cell.Contains("🛑 KO"))
-						styledCells.Add($"[bold red]{cell}[/]");
+					// 🟢 Usamos el shortcode :check_mark_button: para el estado OK
+					if (cell.Contains("OK"))
+						styledCells.Add($"[bold green]:check_mark_button: OK[/]");
+
+					// 🔴 Usamos el shortcode :cross_mark: para el estado KO
+					else if (cell.Contains("KO"))
+						styledCells.Add($"[bold red]:cross_mark: KO[/]");
+
 					else
 						styledCells.Add(cell);
 				}
@@ -79,6 +95,7 @@ public class ConsoleWriter : IConsoleWriter
 					styledCells.Add(cell);
 				}
 			}
+
 			table.AddRow(styledCells.ToArray());
 		}
 
@@ -176,11 +193,10 @@ public class ConsoleWriter : IConsoleWriter
 
 	#endregion
 
-	#region Métodos de Progreso Originales
+	#region Métodos de Progreso Originales (Implementados usando TextWriter/Logger y Spectre.Console)
 
 	public void ProgressStart(string name, int? totalCount = null)
 	{
-		// ... (código de ProgressStart)
 		_textWriter.WriteLine($"{name}: started.");
 		_logger.LogInformation("Progress {ProgressName} started", name);
 		_previousProgressName = name;
@@ -190,7 +206,6 @@ public class ConsoleWriter : IConsoleWriter
 
 	public void InProgressItemComplete(string name)
 	{
-		// ... (código de InProgressItemComplete)
 		Interlocked.Increment(ref _progressCompletedCount);
 		_logger.LogTrace("Progress name {ProgressName} count: {Current}/{Total}", name, _progressCompletedCount, _progressTotalCount);
 		lock (PhotoInprogressLock)
@@ -204,7 +219,6 @@ public class ConsoleWriter : IConsoleWriter
 
 	public void ProgressFinish(string name, string? additionalInformation = "")
 	{
-		// ... (código de ProgressFinish)
 		_progressCompletedCount = 0;
 		TryToClearConsoleLastLine(name);
 		// Usamos SC para asegurar la escritura completa y el color de finalización
@@ -215,11 +229,10 @@ public class ConsoleWriter : IConsoleWriter
 
 	#endregion
 
-	#region Lógica de Limpieza de Consola Original
+	#region Lógica de Limpieza de Consola Original (Métodos Auxiliares)
 
 	private void CoverAllLine(string toWrite)
 	{
-		// ... (código de CoverAllLine)
 		if (!UserInteractive())
 		{
 			_logger.LogTrace("Console is not user interactive, directly writing to console");
@@ -235,7 +248,6 @@ public class ConsoleWriter : IConsoleWriter
 
 	private void TryToClearConsoleLastLine(string name)
 	{
-		// ... (código de TryToClearConsoleLastLine)
 		if (!UserInteractive())
 		{
 			_logger.LogTrace("Console is not user interactive, skip clearing console");
@@ -244,6 +256,8 @@ public class ConsoleWriter : IConsoleWriter
 
 		if (_previousProgressName != name)
 			return;
+
+		// Lógica de manipulación del cursor
 		if (Console.CursorTop > 0)
 			Console.SetCursorPosition(0, Console.CursorTop);
 		if (Console.WindowWidth > 0)
@@ -254,8 +268,8 @@ public class ConsoleWriter : IConsoleWriter
 
 	private bool UserInteractive()
 	{
-		// ... (código de UserInteractive)
-		return Environment.UserInteractive && !Environment.CurrentDirectory.Contains("tests");
+		// Lógica para determinar si la consola es interactiva (y no un entorno de prueba)
+		return Environment.UserInteractive && !Environment.CurrentDirectory.Contains("tests", StringComparison.OrdinalIgnoreCase);
 	}
 
 	#endregion

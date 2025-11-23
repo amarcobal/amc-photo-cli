@@ -32,11 +32,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Services\Implementations\ArchiveIsqLiteConnectionStringProvider.cs" />
+    <Compile Remove="Models\Options\**" />
+    <EmbeddedResource Remove="Models\Options\**" />
+    <None Remove="Models\Options\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Models\Options\" />
+    <Compile Remove="Services\Implementations\ArchiveIsqLiteConnectionStringProvider.cs" />
   </ItemGroup>
 
 </Project>

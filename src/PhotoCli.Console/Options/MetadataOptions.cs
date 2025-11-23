@@ -29,7 +29,7 @@ public class MetadataOptions
 
 	#region Required
 
-	[Option(OptionNames.OperationOptionNameShort, OptionNames.OperationOptionNameLong, HelpText = HelpTexts.MetadataOperation)]
+	[Option(OptionNames.OperationOptionNameShort, OptionNames.OperationOptionNameLong, Required = true, HelpText = HelpTexts.MetadataOperation)]
 	public MetadataOperation Operation { get; }
 
 	[Option(OptionNames.FolderProcessTypeOptionNameShort, OptionNames.FolderProcessTypeOptionNameLong, HelpText = HelpTexts.FolderProcessType)]

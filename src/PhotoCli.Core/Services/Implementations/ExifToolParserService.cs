@@ -95,7 +95,7 @@ namespace PhotoCli.Core.Services.Implementations
 		{
 			try
 			{
-				ICollection<KeyValuePair<string, string>> metadata;
+				Dictionary<string, string> metadata;
 				using (var exifTool = new ExifTool(exiftoolConfigPath: _options.ExifToolFileConfig))
 				{
 					metadata = exifTool.ExtractAllMetadata(filePath);

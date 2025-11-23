@@ -35,19 +35,19 @@
     },
     "Metadata - 1. Check (Template)": {
       "commandName": "Project",
-      "commandLineArgs": "metadata check --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\""
+      "commandLineArgs": "metadata --operation check --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\""
     },
     "Metadata - 2. Get (Template)": {
       "commandName": "Project",
-      "commandLineArgs": "metadata get --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --show-output"
+      "commandLineArgs": "metadata --operation get --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --show-output"
     },
     "Metadata - 3. Add (Template DryRun)": {
       "commandName": "Project",
-      "commandLineArgs": "metadata add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -d"
+      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -d"
     },
     "Metadata - 4. Delete (Template DryRun)": {
       "commandName": "Project",
-      "commandLineArgs": "metadata delete --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -d"
+      "commandLineArgs": "metadata --operation delete --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -d"
     }
   }
 }

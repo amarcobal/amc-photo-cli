@@ -4,6 +4,7 @@ public interface IConsoleWriter
 {
 	// Métodos de escritura básicos
 	void Write(string value);
+	void WriteMarkup(string value);
 	void WriteError(string value); // <-- NUEVO: Para mensajes de error resaltados
 
 	/// <summary>

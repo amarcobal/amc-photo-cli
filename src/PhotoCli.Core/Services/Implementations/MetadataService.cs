@@ -369,30 +369,28 @@ public class MetadataService : IMetadataService
 		var result = new Dictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>>(StringComparer.OrdinalIgnoreCase);
 
 		// 1. Obtener todos los valores de una vez
-		var allMetadata = GetMetadata(photos, metadataKeys, showOutput: false);
+		//var allMetadata = GetMetadata(photos, metadataKeys, showOutput: false);
 
-		// Lista para construir la tabla de resultados
+		// Lista para construir la tabla de resultados (Ahora solo 3 columnas)
 		var rows = new List<List<string>>();
 		bool overallSuccess = true;
-		const int MaxValueDisplayLength = 30; // Límite para evitar tablas demasiado anchas
+		const int MaxValueDisplayLength = 30; // Límite para evitar celdas demasiado anchas
 
-		// 2. Definir todos los encabezados dinámicamente
-		var headers = new List<string> { "File Name", "Status", "Missing REQUIRED Keys" };
-		headers.AddRange(metadataKeys);
+		// 2. Definir los encabezados de las 3 columnas
+		var headers = new List<string> { "File (Full Path)", "Status", $"Template: {contextName} Tags" };
 
 		// 3. Validar cada foto y construir las filas
 		foreach (var photo in photos)
 		{
 			var checkResults = new Dictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>(StringComparer.OrdinalIgnoreCase);
-			allMetadata.TryGetValue(photo.PhotoFile.SourceFullPath, out var photoMetadataDict);
-			photoMetadataDict ??= new Dictionary<string, string>();
+			var photoMetadataDict = photo.ExifData.Metadata;
 
 			// Lógica de validación
 			foreach (var tag in templateTags)
 			{
 				bool hasValue = photoMetadataDict.TryGetValue(tag.Name, out var value) &&
-								!string.IsNullOrWhiteSpace(value) &&
-								!value.Equals("undefined", StringComparison.OrdinalIgnoreCase);
+							!string.IsNullOrWhiteSpace(value) &&
+							!value.Equals("undefined", StringComparison.OrdinalIgnoreCase);
 
 				bool isValid = hasValue || !tag.Required;
 
@@ -406,78 +404,91 @@ public class MetadataService : IMetadataService
 				.ToList();
 
 			string status;
-			string missingKeysString;
+			string statusStyled;
 
 			if (missingRequiredKeys.Count == 0)
 			{
-				status = "✅ OK";
-				missingKeysString = "N/A";
-				_logger.LogInformation("✅ {File} -> Validation ({Context}) PASSED.", photo.PhotoFile.FileName, contextName);
+				status = "OK";
+				statusStyled = "[bold green]:check_mark_button: OK[/]";
 			}
 			else
 			{
-				status = "🛑 KO";
-				missingKeysString = string.Join(", ", missingRequiredKeys);
-				_logger.LogError("🛑 {File} -> Validation ({Context}) FAILED. Missing REQUIRED keys: {Keys}",
-					photo.PhotoFile.FileName, contextName, missingKeysString);
+				status = "KO";
+				statusStyled = "[bold red]:cross_mark: KO[/]";
 				overallSuccess = false;
 			}
 
-			// Construcción de la fila (Aseguramos EscapeMarkup para Spectre.Console):
-			var row = new List<string>
-			{
-				photo.PhotoFile.FileName.EscapeMarkup(),
-				status,
-				missingKeysString.EscapeMarkup()
-			};
+			// 4.3. Construcción del Contenido Anidado (Columna Template)
+			var templateCellContent = new StringBuilder();
 
-			// Añadir los valores dinámicos (una columna por cada metadato)
-			foreach (var key in metadataKeys)
+			foreach (var tag in templateTags)
 			{
-				if (checkResults.TryGetValue(key, out var check))
+				if (checkResults.TryGetValue(tag.Name, out var check))
 				{
-					// Formateo del valor: Truncar si es largo, o mostrar un indicador de vacío.
+					// INICIO: Envolvemos TODO el contenido de la línea en [dim]
+					templateCellContent.Append("[dim]");
+
+					// 1. Tag Name y Requisito
+					var requiredStatus = tag.Required
+					// Solución FINAL: Usamos [[R]] para garantizar que los corchetes interiores
+					// se interpreten como texto literal. Luego, lo envolvemos en [bold red].
+					? "[bold red][[R]][/]"
+					: "[dim](O)[/]";
+
+					// Usamos [blue] para el Tag Name, pero dentro de [dim]
+					templateCellContent.Append($"* [blue]{tag.Name.EscapeMarkup()}[/] {requiredStatus}: ");
+
+					// 2. Valor
 					var valueToDisplay = check.Value;
 
 					if (!check.HasValue)
 					{
-						valueToDisplay = check.Required ? "(MISSING!)" : "(Empty)";
+						// CORRECCIÓN APLICADA AQUÍ: Aseguramos que "(Empty)" también sea markup válido.
+						valueToDisplay = check.Required ? "[bold red](MISSING!)[/]" : "[dim](Empty)[/]";
 					}
 					else if (valueToDisplay.Length > MaxValueDisplayLength)
 					{
-						valueToDisplay = valueToDisplay[..MaxValueDisplayLength].EscapeMarkup() + "...";
+						valueToDisplay = $"[cyan]{valueToDisplay[..MaxValueDisplayLength].EscapeMarkup()}...[/]";
 					}
 					else
 					{
-						valueToDisplay = valueToDisplay.EscapeMarkup();
+						valueToDisplay = $"[cyan]{valueToDisplay.EscapeMarkup()}[/]";
 					}
 
-					row.Add(valueToDisplay);
-				}
-				else
-				{
-					row.Add("N/A");
+					templateCellContent.AppendLine(valueToDisplay + "[/]"); // FIN: Cerramos la etiqueta [dim]
 				}
 			}
+
+			// Construcción de la fila de 3 columnas
+			var row = new List<string>
+		{
+			// Columna 1: File (Ruta Completa)
+			photo.PhotoFile.SourceFullPath.EscapeMarkup(),
+			
+			// Columna 2: Status (Estilizado)
+			statusStyled,
+			
+			// Columna 3: Template (Contenido Anidado con formato [dim])
+			templateCellContent.ToString()
+		};
 
 			rows.Add(row);
 			result[photo.PhotoFile.SourceFullPath] = checkResults;
 		} // Fin foreach photo
 
-		// 4. Salida en la Consola (Tabla Final)
+		// 4. Salida en la Consola (Tabla Final de 3 columnas)
 
-		// CORRECCIÓN: Reemplazo de WriteEmptyLine y WriteTable
-		_consoleWriter.Write("[dim] [/]"); // Línea vacía sutil con Spectre.Console
+		_consoleWriter.WriteMarkup("[dim] [/]"); // Línea vacía sutil con Spectre.Console
 
 		_consoleWriter.WriteValidationTable(headers, rows, $"Metadata Validation Report: {contextName}");
 
-		_consoleWriter.Write("[dim] [/]"); // Línea vacía sutil
+		_consoleWriter.WriteMarkup("[dim] [/]"); // Línea vacía sutil
 
 		// Mensaje de resumen final
 		if (overallSuccess)
 		{
 			// USO DEL CONSOLE WRITER: Éxito estilizado
-			_consoleWriter.Write("✨ [bold green]All files passed the required metadata check.[/]");
+			_consoleWriter.WriteMarkup("✨ [bold green]All files passed the required metadata check.[/]");
 		}
 		else
 		{

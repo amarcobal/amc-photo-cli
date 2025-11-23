@@ -27,6 +27,7 @@ using PhotoCli.Core.Services.Implementations.ReverseGeocodes;
 using PhotoCli.Core.Models.ReverseGeocode.BigDataCloud;
 using PhotoCli.Core.Models.ReverseGeocode.GoogleMaps;
 using PhotoCli.Core.Models.ReverseGeocode.OpenStreetMap;
+using Spectre.Console;
 
 namespace PhotoCli.Console;
 
@@ -34,6 +35,15 @@ public static class Program
 {
 	public static Task<int> Main(string[] args)
 	{
+		// =========================================================
+		// 🚨 INICIO DE LA CORRECCIÓN DE SPECTRE.CONSOLE 🚨
+		// Esto fuerza a Spectre.Console a emitir códigos de color ANSI,
+		// incluso si la salida está siendo redireccionada o el terminal
+		// no es reconocido como interactivo.
+		Spectre.Console.AnsiConsole.Profile.Capabilities.Ansi = true;
+		Spectre.Console.AnsiConsole.Profile.Capabilities.Unicode = true;
+		// =========================================================
+
 		return MainStream(args, System.Console.Out);
 	}
 
@@ -135,7 +145,7 @@ public static class Program
 		return MainWithServiceProvider(serviceScope.ServiceProvider);
 	}
 
-	private static void WriteErrorOutputValidationErrors(ValidationResult validationResult, TextWriter textWriter)
+	private static void WriteErrorOutputValidationErrors(FluentValidation.Results.ValidationResult validationResult, TextWriter textWriter)
 	{
 		foreach (var validationResultError in validationResult.Errors)
 			textWriter.WriteLine(validationResultError);
@@ -320,7 +330,20 @@ public static class Program
 
 	private static bool ParseArgs(IReadOnlyList<string> args, TextWriter textWriter, out object parsedObject, out ExitCode exitCode)
 	{
-		var commandLineArgsParsed = Parser.Default.ParseArguments<CopyOptions, InfoOptions, ArchiveOptions, AddressOptions, SettingsOptions, MetadataOptions, IngestOptions>(args);
+		// 1. Configurar y crear una instancia del Parser
+		var parser = new Parser(with =>
+		{
+			with.CaseInsensitiveEnumValues = true;
+
+			// Opcional pero recomendado: hace que los verbos también sean insensibles a mayúsculas.
+			with.CaseSensitive = false;
+		});
+
+		// 2. Usar la instancia configurada para parsear los argumentos
+		var commandLineArgsParsed = parser.ParseArguments<CopyOptions, InfoOptions, ArchiveOptions, AddressOptions, SettingsOptions, MetadataOptions, IngestOptions>(args);
+
+		// El resto de la lógica del método sigue siendo la misma
+
 		if (commandLineArgsParsed.Tag == ParserResultType.NotParsed)
 		{
 			var notParsedResult = (NotParsed<object>)commandLineArgsParsed;
@@ -333,7 +356,8 @@ public static class Program
 						break;
 					case 2:
 						var helpVerb = args[1];
-						// Can't use CommandLineParser's UsageExamples when using Nullable Reference Types. ref: https://github.com/commandlineparser/commandline/issues/714 , we are building on our own.
+						// Can't use CommandLineParser's UsageExamples when using Nullable Reference Types. 
+						// ref: https://github.com/commandlineparser/commandline/issues/714 , we are building on our own.
 						HelpTextBuilder.ExampleUsages(helpVerb, textWriter);
 						break;
 				}
