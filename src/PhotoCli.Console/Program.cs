@@ -40,6 +40,7 @@ public static class Program
 		// Esto fuerza a Spectre.Console a emitir códigos de color ANSI,
 		// incluso si la salida está siendo redireccionada o el terminal
 		// no es reconocido como interactivo.
+		System.Console.OutputEncoding = System.Text.Encoding.UTF8;
 		Spectre.Console.AnsiConsole.Profile.Capabilities.Ansi = true;
 		Spectre.Console.AnsiConsole.Profile.Capabilities.Unicode = true;
 		// =========================================================

@@ -110,7 +110,7 @@ public class IngestRunner : BaseRunner, IConsoleRunner
 			if (!string.IsNullOrWhiteSpace(_options.Template))
 			{
 				_consoleWriter.Write($"[bold cyan]Checking metadata against template:[/] {_options.Template}");
-				var checkResults = _metadataService.CheckMetadataFromTemplate(photos, _options.Template);
+				var checkResults = _metadataService.CheckMetadataFromTemplate(photos, _options.Template, null);
 				
 				// 4.3 Inject Missing Metadata
 				// We inject if there are any missing required keys OR if we just want to ensure everything is there.

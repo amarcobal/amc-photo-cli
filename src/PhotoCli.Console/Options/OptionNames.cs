@@ -124,6 +124,9 @@ internal static class OptionNames
 	internal const char TemplateOptionNameShort = 't';
 	internal const string TemplateOptionNameLong = "template";
 
+	internal const char ViewOptionNameShort = 'v';
+	internal const string ViewOptionNameLong = "view";
+
 	#endregion
 
 

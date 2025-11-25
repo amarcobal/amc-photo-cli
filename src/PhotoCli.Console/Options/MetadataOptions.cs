@@ -15,7 +15,8 @@ public class MetadataOptions
 		string? key = null,
 		string? value = null,
 		string? template = null,
-		bool isDryRun = false)
+		bool isDryRun = false,
+		IEnumerable<MetadataCheckViewType>? view = null)
 	{
 		Operation = operation;
 		FolderProcessType = folderProcessType;
@@ -25,6 +26,7 @@ public class MetadataOptions
 		Value = value;
 		Template = template;
 		IsDryRun = isDryRun;
+		View = view ?? new List<MetadataCheckViewType>();
 	}
 
 	#region Required
@@ -56,6 +58,13 @@ public class MetadataOptions
 
 	[Option(OptionNames.IsDryRunOptionNameShort, OptionNames.IsDryRunOptionNameLong, HelpText = HelpTexts.IsDryRun)]
 	public bool IsDryRun { get; }
+
+	#region Metadata Check Options
+
+	[Option(OptionNames.ViewOptionNameShort, OptionNames.ViewOptionNameLong, HelpText = HelpTexts.MetadataView)]
+	public IEnumerable<MetadataCheckViewType> View { get; }
+
+	#endregion
 
 	#endregion
 }

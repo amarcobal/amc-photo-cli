@@ -55,8 +55,9 @@ public class ConsoleWriter : IConsoleWriter
 			.Title($"[bold underline yellow]{title}[/]")
 
 			// Asegura que el borde dibuje líneas horizontales entre filas.
-			.Border(TableBorder.Rounded)
-			.BorderColor(Color.Grey);
+			.Border(TableBorder.Square)
+			.BorderColor(Color.Grey)
+			.ShowRowSeparators();
 
 		// Añadir las columnas
 		foreach (var header in headers)
@@ -77,18 +78,18 @@ public class ConsoleWriter : IConsoleWriter
 				{
 					// 🟢 Usamos el shortcode :check_mark_button: para el estado OK
 					if (cell.Contains("OK"))
-						styledCells.Add($"[bold green]:check_mark_button: OK[/]");
+						styledCells.Add($"[bold green]✅ OK[/]");
 
 					// 🔴 Usamos el shortcode :cross_mark: para el estado KO
 					else if (cell.Contains("KO"))
-						styledCells.Add($"[bold red]:cross_mark: KO[/]");
+						styledCells.Add($"[bold red]❌ KO[/]");
 
 					else
 						styledCells.Add(cell);
 				}
 				else if (i > 2 && cell.Contains("(MISSING!)")) // Valores de metadatos faltantes
 				{
-					styledCells.Add($"[italic darkred]{cell}[/]");
+					styledCells.Add($"[italic red]{cell}[/]");
 				}
 				else
 				{

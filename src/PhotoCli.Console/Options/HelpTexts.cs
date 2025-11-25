@@ -103,6 +103,8 @@ public static class HelpTexts
 
 	public const string MetadataTemplate = "(Optional) Template name to apply or check. ( e.g. 'AMC-Basic-Metadata' )";
 
+	public const string MetadataView = "(Optional) Defines which columns/details to display. Values: Template, Identity, TemplateDetails, IdentityDetails.";
+
 	public const string InputFiles = "(Optional) Specific file paths to process. ( Alternative to '--input' )";
 
 	#endregion

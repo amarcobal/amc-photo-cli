@@ -1,4 +1,5 @@
 using PhotoCli.Core.Models;
+using PhotoCli.Core.Models.Enums;
 
 namespace PhotoCli.Core.Services.Contracts;
 
@@ -34,7 +35,7 @@ public interface IMetadataService
 	#endregion
 
 	#region VALIDACIÓN (Check)
-	IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>> CheckMetadataFromTemplate(IReadOnlyCollection<Photo> photos, string templateName);
+	IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>> CheckMetadataFromTemplate(IReadOnlyCollection<Photo> photos, string templateName, IReadOnlyCollection<MetadataCheckViewType> metadataViewTypes);
 	IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>> CheckMetadata(IReadOnlyCollection<Photo> photos, string metadataKey, bool isRequired = true);
 	#endregion
 }

@@ -146,14 +146,25 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 				case MetadataOperation.Check:
 					IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool IsRequired, bool IsValid)>> checkResults;
 
+					var viewTypes = _options.View.ToList();
+
 					if (!string.IsNullOrWhiteSpace(_options.Template))
 					{
-						// El MetadataService ahora se encarga de llamar a WriteValidationTable
-						checkResults = _metadataService.CheckMetadataFromTemplate(photos, _options.Template);
+						// LÓGICA DE VALOR POR DEFECTO: Si Template se usa y NO hay opciones de vista, forzar Template (resumen).
+						if (!viewTypes.Any())
+						{
+							viewTypes.Add(MetadataCheckViewType.Template);
+						}
+
+						checkResults = _metadataService.CheckMetadataFromTemplate(
+							photos,
+							_options.Template,
+							viewTypes.AsReadOnly()
+							);
 					}
 					else if (!string.IsNullOrWhiteSpace(_options.Key))
 					{
-						// El MetadataService ahora se encarga de llamar a WriteValidationTable
+						// Para una sola clave, la columna de template siempre aparece y siempre es el detalle
 						checkResults = _metadataService.CheckMetadata(photos, _options.Key, isRequired: true);
 					}
 					else
@@ -205,12 +216,13 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 		var filesFailed = results.Count(r => r.Value.Any(kv => !kv.Value.IsValid));
 		var filesPassed = totalFiles - filesFailed;
 
-		_consoleWriter.Write("[dim] [/]"); // Separador sutil
+		_consoleWriter.WriteMarkup("[dim] [/]"); // Separador sutil
 
 		// CORRECCIÓN: Resumen final estilizado
-		_consoleWriter.Write($"\n--- [bold brightwhite]Metadata Check Summary[/] (Total Files: **{totalFiles}**) ---");
-		_consoleWriter.Write($"[green]✅ Files Passed Validation:[/] [bold]{filesPassed}[/]");
-		_consoleWriter.Write($"[red]🛑 Files Failed Validation:[/] [bold]{filesFailed}[/]");
+		_consoleWriter.WriteMarkup("\n--- [bold white]Metadata Check Summary[/] ---");
+		_consoleWriter.WriteMarkup($"[dim]Total Files:[/] [bold]{totalFiles}[/]");
+		_consoleWriter.WriteMarkup($"[green]✅ Files Passed Validation:[/] [bold]{filesPassed}[/]");
+		_consoleWriter.WriteMarkup($"[red]🛑 Files Failed Validation:[/] [bold]{filesFailed}[/]");
 
 		if (filesFailed > 0)
 		{
