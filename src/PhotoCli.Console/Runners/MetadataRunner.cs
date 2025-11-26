@@ -6,6 +6,8 @@ using PhotoCli.Core.Models;
 using PhotoCli.Core.Models.Enums;
 using PhotoCli.Core.Services.Contracts;
 using Spectre.Console; // Necesario para Markup.Escape
+using System.Linq; // Necesario para .Any() y .ToList()
+using System; // Necesario para Environment
 
 namespace PhotoCli.Console.Runners;
 
@@ -39,6 +41,23 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 
 	public async Task<ExitCode> Execute()
 	{
+		// *** CAMBIO: Resumen del comando (Punto 1) ***
+		// Usamos el nombre de la operación y el path de entrada
+		var commandName = $"METADATA {_options.Operation.ToString().ToUpper()}";
+		var sourcePath = _options.InputPath ?? Environment.CurrentDirectory;
+
+		// NOTA: Si usas InputFiles, puedes ajustar sourcePath o usar "Input Files"
+		if (_options.InputFiles?.Any() == true)
+		{
+			sourcePath = "Input File List"; // O la ruta de la primera carpeta
+		}
+
+		_consoleWriter.WriteCommandSummary(
+			commandName,
+			sourcePath,
+			_options.Template // Pasa el template si existe
+		);
+
 		// 1. Get Photos
 		IReadOnlyCollection<Photo> photos;
 		if (_options.InputFiles?.Any() == true)
@@ -165,6 +184,7 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 					else if (!string.IsNullOrWhiteSpace(_options.Key))
 					{
 						// Para una sola clave, la columna de template siempre aparece y siempre es el detalle
+						// Nota: El isRequired: true se maneja internamente en CheckMetadata
 						checkResults = _metadataService.CheckMetadata(photos, _options.Key, isRequired: true);
 					}
 					else

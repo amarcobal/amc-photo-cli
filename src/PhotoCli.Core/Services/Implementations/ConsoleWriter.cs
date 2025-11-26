@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
+using PhotoCli.Core.Models.SpectreConsole;
 
 namespace PhotoCli.Core.Services.Implementations;
 
@@ -30,15 +31,13 @@ public class ConsoleWriter : IConsoleWriter
 	public void Write(string value)
 	{
 		// Para la escritura simple, usamos Spectre.Console para renderizar el marcado.
-		// Nota: El EscapeMarkup ya se debería haber realizado en el servicio de llamada
-		// pero se incluye aquí por seguridad si la cadena no viene del logger.
 		AnsiConsole.MarkupLine(value.EscapeMarkup());
 	}
 
-	public void WriteMarkup(string markup) 
-    {
-        AnsiConsole.MarkupLine(markup);
-    }
+	public void WriteMarkup(string markup)
+	{
+		AnsiConsole.MarkupLine(markup);
+	}
 
 	public void WriteError(string value)
 	{
@@ -47,57 +46,66 @@ public class ConsoleWriter : IConsoleWriter
 	}
 
 	/// <summary>
-	/// Imprime un reporte de validación en formato de tabla usando Spectre.Console.
+	/// Imprime un resumen del comando ejecutado al inicio.
+	/// Es dinámico y solo muestra el template si está presente.
 	/// </summary>
-	public void WriteValidationTable(IEnumerable<string> headers, IEnumerable<List<string>> rows, string title)
+	public void WriteCommandSummary(string commandName, string sourceFolder, string templateName)
+	{
+		// Limpiamos y estandarizamos el nombre del comando
+		var formattedCommand = commandName.ToUpper().Replace("-", " ");
+
+		// Usamos la ruta simplificada (solo el nombre de la carpeta) para un look más limpio
+		var sourceFolderName = new DirectoryInfo(sourceFolder).Name;
+
+		AnsiConsole.MarkupLine($"[bold yellow]---[/] [bold]COMMAND SUMMARY[/] [bold yellow]----------------------------------------------------------------[/]");
+		AnsiConsole.MarkupLine($"[bold]Command:[/]\t [green]{formattedCommand.EscapeMarkup()}[/]");
+		AnsiConsole.MarkupLine($"[bold]Source Dir:[/]\t [blue]{sourceFolderName.EscapeMarkup()}[/]");
+
+		// El template es opcional, solo se muestra si se proporciona
+		if (!string.IsNullOrWhiteSpace(templateName))
+		{
+			AnsiConsole.MarkupLine($"[bold]Template:[/]\t [cyan]{templateName.EscapeMarkup()}[/]");
+		}
+
+		AnsiConsole.MarkupLine($"[bold yellow]-----------------------------------------------------------------[/]\n");
+	}
+
+	public void WriteTable(IEnumerable<TableColumnConfig> columns, IEnumerable<List<string>> rows, string title)
 	{
 		var table = new Table()
 			.Title($"[bold underline yellow]{title}[/]")
-
-			// Asegura que el borde dibuje líneas horizontales entre filas.
 			.Border(TableBorder.Square)
 			.BorderColor(Color.Grey)
-			.ShowRowSeparators();
+			.ShowRowSeparators()
+			.Expand(); // Expande la tabla para usar todo el ancho disponible
 
-		// Añadir las columnas
-		foreach (var header in headers)
+		// --- LÓGICA DE CONFIGURACIÓN DE COLUMNAS ---
+
+		foreach (var config in columns)
 		{
-			table.AddColumn(new TableColumn($"[bold blue]{header}[/]"));
-		}
+			// 1. Crear el objeto de columna con el texto del encabezado
+			var column = new TableColumn($"[bold blue]{config.HeaderText}[/]");
 
-		// Añadir las filas con estilización de Status y valores faltantes
-		foreach (var rowData in rows)
-		{
-			var styledCells = new List<string>();
-
-			for (int i = 0; i < rowData.Count; i++)
+			// 2. Aplicar NoWrap si está configurado
+			if (config.NoWrap)
 			{
-				var cell = rowData[i];
-
-				if (i == 1) // Columna 'Status'
-				{
-					// 🟢 Usamos el shortcode :check_mark_button: para el estado OK
-					if (cell.Contains("OK"))
-						styledCells.Add($"[bold green]✅ OK[/]");
-
-					// 🔴 Usamos el shortcode :cross_mark: para el estado KO
-					else if (cell.Contains("KO"))
-						styledCells.Add($"[bold red]❌ KO[/]");
-
-					else
-						styledCells.Add(cell);
-				}
-				else if (i > 2 && cell.Contains("(MISSING!)")) // Valores de metadatos faltantes
-				{
-					styledCells.Add($"[italic red]{cell}[/]");
-				}
-				else
-				{
-					styledCells.Add(cell);
-				}
+				column.NoWrap();
 			}
 
-			table.AddRow(styledCells.ToArray());
+			// 3. Aplicar Width si está configurado
+			if (config.Width.HasValue)
+			{
+				column.Width(config.Width.Value);
+			}
+
+			// 4. Añadir la columna configurada a la tabla
+			table.AddColumn(column);
+		}
+
+		// Añadir las filas
+		foreach (var rowData in rows)
+		{
+			table.AddRow(rowData.ToArray());
 		}
 
 		AnsiConsole.Write(table);
@@ -106,9 +114,7 @@ public class ConsoleWriter : IConsoleWriter
 	/// <summary>
 	/// Muestra una estructura jerárquica de archivos usando un Tree.
 	/// </summary>
-	/// <param name="title">Título del árbol.</param>
-	/// <param name="rootPath">Ruta base desde donde se construye el árbol.</param>
-	/// <param name="filePaths">Lista de archivos a incluir en la estructura.</param>
+	// ... (Resto del método WriteFileTree se mantiene igual) ...
 	public void WriteFileTree(string title, string rootPath, IReadOnlyCollection<string> filePaths)
 	{
 		// El contenedor principal es de tipo Tree.
@@ -191,6 +197,7 @@ public class ConsoleWriter : IConsoleWriter
 
 		AnsiConsole.Write(tree);
 	}
+
 
 	#endregion
 

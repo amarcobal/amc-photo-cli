@@ -35,7 +35,7 @@
     },
     "Metadata - 1. Check (Template)": {
       "commandName": "Project",
-      "commandLineArgs": "metadata --operation check --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\""
+      "commandLineArgs": "metadata --operation check --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --view IdentityDetails TemplateDetails"
     },
     "Metadata - 2. Get (Template)": {
       "commandName": "Project",
