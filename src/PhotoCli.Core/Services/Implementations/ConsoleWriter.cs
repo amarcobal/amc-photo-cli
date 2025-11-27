@@ -45,29 +45,45 @@ public class ConsoleWriter : IConsoleWriter
 		AnsiConsole.MarkupLine($"[red bold]ERROR:[/] {value.EscapeMarkup()}");
 	}
 
-	/// <summary>
-	/// Imprime un resumen del comando ejecutado al inicio.
-	/// Es dinámico y solo muestra el template si está presente.
-	/// </summary>
 	public void WriteCommandSummary(string commandName, string sourceFolder, string templateName)
 	{
 		// Limpiamos y estandarizamos el nombre del comando
 		var formattedCommand = commandName.ToUpper().Replace("-", " ");
 
-		// Usamos la ruta simplificada (solo el nombre de la carpeta) para un look más limpio
-		var sourceFolderName = new DirectoryInfo(sourceFolder).Name;
+		// Usamos FullName para manejar rutas UNC de red correctamente si es necesario
+		var sourceFolderName = new DirectoryInfo(sourceFolder).FullName;
 
-		AnsiConsole.MarkupLine($"[bold yellow]---[/] [bold]COMMAND SUMMARY[/] [bold yellow]----------------------------------------------------------------[/]");
-		AnsiConsole.MarkupLine($"[bold]Command:[/]\t [green]{formattedCommand.EscapeMarkup()}[/]");
-		AnsiConsole.MarkupLine($"[bold]Source Dir:[/]\t [blue]{sourceFolderName.EscapeMarkup()}[/]");
+		var rule = new Rule("[bold]COMMAND SUMMARY[/]");
+		rule.Justification = Justify.Center;
+		rule.Style = new Style(foreground: Color.Yellow);
+		AnsiConsole.Write(rule);
 
-		// El template es opcional, solo se muestra si se proporciona
+		// 1. Imprimir Comando
+		AnsiConsole.MarkupLine($"[bold]Command:[/]\t[green]{formattedCommand.EscapeMarkup()}[/]");
+
+		// 2. Configurar y escribir la ruta de origen (Source Dir)
+		var path = new TextPath(sourceFolderName);
+		path.RootStyle = new Style(foreground: Color.Red);
+		path.SeparatorStyle = new Style(foreground: Color.Green);
+		path.StemStyle = new Style(foreground: Color.Blue);
+		path.LeafStyle = new Style(foreground: Color.Yellow);
+
+		// Escribir el label sin salto de línea
+		AnsiConsole.Markup($"[bold]Source Dir:[/]\t");
+
+		// Escribir el objeto TextPath
+		AnsiConsole.Write(path);
+
+		// FIX: Añadir un salto de línea explícito para que el siguiente elemento comience abajo.
+		AnsiConsole.WriteLine();
+
+		// 3. Imprimir Template (si existe)
 		if (!string.IsNullOrWhiteSpace(templateName))
 		{
-			AnsiConsole.MarkupLine($"[bold]Template:[/]\t [cyan]{templateName.EscapeMarkup()}[/]");
+			AnsiConsole.MarkupLine($"[bold]Template:[/]\t[cyan]{templateName.EscapeMarkup()}[/]");
 		}
 
-		AnsiConsole.MarkupLine($"[bold yellow]-----------------------------------------------------------------[/]\n");
+		AnsiConsole.Write(new Rule().RuleStyle(new Style(foreground: Color.Yellow)));
 	}
 
 	public void WriteTable(IEnumerable<TableColumnConfig> columns, IEnumerable<List<string>> rows, string title)

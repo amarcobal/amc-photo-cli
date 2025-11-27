@@ -421,13 +421,13 @@ public class MetadataService : IMetadataService
 					if (ok)
 					{
 						// Se elimina el espacio extra que tenías en el código: [bold white] {check.DisplayName}
-						identityBuilder.AppendLine($"[green]✔[/] [bold white]{check.DisplayName}[/]: [cyan]{val!.EscapeMarkup()}[/]");
+						identityBuilder.AppendLine($"[green]✔[/] [bold white] {check.DisplayName}[/]: [cyan]{val!.EscapeMarkup()}[/]");
 					}
 					else
 					{
 						string statusDisplay = isUnknown ? "[yellow]Unknown[/]" : "[bold white on red]MISSING![/]"; // Mejor estilo para MISSING
 																													// Se elimina el espacio extra que tenías en el código: [bold white] {check.DisplayName}
-						identityBuilder.AppendLine($"[bold red]✖[/] [bold white]{check.DisplayName}[/]: {statusDisplay}");
+						identityBuilder.AppendLine($"[bold red]✖[/] [bold white] {check.DisplayName}[/]: {statusDisplay}");
 					}
 				}
 			}

@@ -33,21 +33,25 @@
       "commandName": "Project",
       "commandLineArgs": "copy --process-type FlattenAllSubFolders --group-by DecadeYearYearShortMonthNameYearMonthDay --naming-style DateTimeWithSubsecondsAuthorDevice --number-style OnlySequentialNumbers --no-device InSubFolder -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -o \"C:\\Work\\Photography\\Test\\Photo-cli\\Photo-Video\" -d"
     },
-    "Metadata - 1. Check (Template)": {
+    "Metadata - PC - 1. Check (Template)": {
       "commandName": "Project",
       "commandLineArgs": "metadata --operation check --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --view IdentityDetails TemplateDetails"
     },
-    "Metadata - 2. Get (Template)": {
+    "Metadata - PC - 2. Get (Template)": {
       "commandName": "Project",
       "commandLineArgs": "metadata --operation get --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --show-output"
     },
-    "Metadata - 3. Add (Template DryRun)": {
+    "Metadata - PC - 3. Add (Template DryRun)": {
       "commandName": "Project",
       "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -d"
     },
-    "Metadata - 4. Delete (Template DryRun)": {
+    "Metadata - PC - 4. Delete (Template DryRun)": {
       "commandName": "Project",
       "commandLineArgs": "metadata --operation delete --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -d"
+    },
+    "Metadata - NAS - 1. Check (Template)": {
+      "commandName": "Project",
+      "commandLineArgs": "metadata --operation check --template \"AMC-Basic-Metadata\" -i \"\\\\NASARI\\home\\Test-PhotoCli\" --view IdentityDetails TemplateDetails"
     }
   }
 }
