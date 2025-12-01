@@ -317,62 +317,44 @@ public class MetadataService : IMetadataService
 	}
 
 	/// <summary>
-	/// MÉTODO BASE DE VALIDACIÓN: Comprueba una lista de TemplateTags contra las fotos, generando una salida en formato tabla.
+	/// MÉTODO BASE DE VALIDACIÓN
 	/// </summary>
 	private IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>> CheckMetadataFromTemplate(
 		IReadOnlyCollection<Photo> photos,
 		IReadOnlyCollection<TemplateTag> templateTags,
 		string contextName,
 		IReadOnlyCollection<MetadataCheckViewType> viewTypes,
-		bool allowUnknownIdentity) // Nuevo parámetro para control de Identity
+		bool allowUnknownIdentity)
 	{
-		// 1. Traducción de la vista a booleanos de control de UI
+		// 1. Configuración de vista
 		bool showTemplateColumn = viewTypes.Contains(MetadataCheckViewType.Template) || viewTypes.Contains(MetadataCheckViewType.TemplateDetails);
 		bool showTemplateDetails = viewTypes.Contains(MetadataCheckViewType.TemplateDetails);
-
 		bool showIdentityColumn = viewTypes.Contains(MetadataCheckViewType.Identity) || viewTypes.Contains(MetadataCheckViewType.IdentityDetails);
 		bool showIdentityDetails = viewTypes.Contains(MetadataCheckViewType.IdentityDetails);
 
-		var metadataKeys = templateTags.Select(t => t.Name).ToList();
 		var result = new Dictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>>(StringComparer.OrdinalIgnoreCase);
 
-		// 2. Definir Configuración de Columnas (TableColumnConfig)
-		// Utilizamos las propiedades para un control limpio.
+		// 2. Definición de Columnas
 		var columns = new List<TableColumnConfig>
 		{
-			// Columna 1: File (Full Path) - Ancho fijo para reducir su dominio
-			new() { HeaderText = "File (Full Path)", Width = 40, NoWrap = false }, 
-			
-			// Columna 2: Status - Ancho fijo mínimo
-			new() { HeaderText = "Status", Width = 15, NoWrap = false }
+			new() { HeaderText = "File", Width = 40, NoWrap = false },
+			new() { HeaderText = "Status", Width = 18, NoWrap = true } // Aumentamos un poco el ancho para "KO (Identity)"
 		};
 
 		if (showIdentityColumn)
-		{
-			// Columna 3: Media Identity - Ancho fijo
 			columns.Add(new() { HeaderText = "Media Identity", Width = 40, NoWrap = false });
-		}
 
 		if (showTemplateColumn)
-		{
-			// Columna 4: Tags - **NoWrap = true** y Width = null para absorber el espacio restante
-			columns.Add(new()
-			{
-				HeaderText = $"Tags: {contextName.Replace("Template ", "").Trim()}",
-				NoWrap = true, // <<<<<< CONFIGURACIÓN DE NO WRAP
-				Width = null // Dejar sin ancho fijo para que use el resto del espacio
-			});
-		}
+			columns.Add(new() { HeaderText = $"Tags: {contextName.Replace("Template ", "").Trim()}", NoWrap = true, Width = null });
 
-		// Lista para construir la tabla de resultados
 		var rows = new List<List<string>>();
 		bool overallSuccess = true;
 		const int MaxValueDisplayLength = 30;
 
-		// 3. Validar cada foto y construir las filas
+		// 3. Procesamiento
 		foreach (var photo in photos)
 		{
-			// --- A. Lógica de Validación de Tags (Template) ---
+			// --- A. Validación de Template Tags ---
 			var checkResults = new Dictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>(StringComparer.OrdinalIgnoreCase);
 			var photoMetadataDict = photo.ExifData.Metadata;
 
@@ -383,21 +365,19 @@ public class MetadataService : IMetadataService
 							!value.Equals("undefined", StringComparison.OrdinalIgnoreCase);
 
 				bool isValid = hasValue || !tag.Required;
-
 				checkResults[tag.Name] = (hasValue, value ?? string.Empty, tag.Required, isValid);
 			}
 
 			bool templatePassed = checkResults.All(kv => kv.Value.IsValid);
 
-			// --- B. Lógica de Validación de Identidad (Make, Model, Author, Device, TakenDateTime) ---
-			// *** CAMBIO: Se añade Taken Date a la lista de chequeos de identidad ***
-			var identityChecks = new (Func<Photo, string?> Getter, string DisplayName, bool IsExif)[]
+			// --- B. Validación de Identidad ---
+			var identityChecks = new (string Key, Func<Photo, string?> Getter, string DisplayName, bool IsExif)[]
 			{
-				(p => p.TakenDateTime?.ToString("yyyy-MM-dd HH:mm:ss"), "Taken Date (Exif)", true), // NUEVO
-				(p => p.Make, "Make (Exif)", true),
-				(p => p.Model, "Model (Exif)", true),
-				(p => p.Author?.ID, "Author (YAML)", false),
-				(p => p.Device?.ID, "Device (YAML)", false)
+				("TakenDate", p => p.TakenDateTime?.ToString("yyyy-MM-dd HH:mm:ss"), "Taken Date", true),
+				("Make",      p => p.Make, "Make", true),
+				("Model",     p => p.Model, "Model", true),
+				("Author",    p => p.Author?.ID, "Author", false),
+				("Device",    p => p.Device?.ID, "Device", false)
 			};
 
 			bool identityPassed = true;
@@ -406,125 +386,97 @@ public class MetadataService : IMetadataService
 			foreach (var check in identityChecks)
 			{
 				var val = check.Getter(photo);
-
-				// Se considera 'Unknown' si la identidad se ha resuelto pero no se encontró en la configuración.
 				bool isUnknown = !check.IsExif && val == "Unknown";
 				bool ok = !string.IsNullOrWhiteSpace(val) && !isUnknown;
 
-				// Lógica crítica: Si falta la fecha, también falla la identidad
 				if (!ok) identityPassed = false;
+
+				// *** IMPORTANTE: Añadimos el resultado de identidad al diccionario de resultados ***
+				// Usamos un prefijo especial "[System]" para que el Runner pueda distinguirlos y contarlos,
+				// pero no se mezclen con los tags del template si alguien itera ciegamente.
+				checkResults[$"[System] {check.Key}"] = (ok, val ?? "", true, ok);
 
 				if (showIdentityDetails)
 				{
-					identityBuilder.Append("* ");
-
 					if (ok)
-					{
-						// Se elimina el espacio extra que tenías en el código: [bold white] {check.DisplayName}
-						identityBuilder.AppendLine($"[green]✔[/] [bold white] {check.DisplayName}[/]: [cyan]{val!.EscapeMarkup()}[/]");
-					}
+						identityBuilder.AppendLine($"[green]✔[/] [dim] {check.DisplayName}:[/] [cyan]{val!.EscapeMarkup()}[/]");
 					else
 					{
-						string statusDisplay = isUnknown ? "[yellow]Unknown[/]" : "[bold white on red]MISSING![/]"; // Mejor estilo para MISSING
-																													// Se elimina el espacio extra que tenías en el código: [bold white] {check.DisplayName}
-						identityBuilder.AppendLine($"[bold red]✖[/] [bold white] {check.DisplayName}[/]: {statusDisplay}");
+						string statusDisplay = isUnknown ? "[yellow]Unknown[/]" : "[bold white on red]MISSING[/]";
+						identityBuilder.AppendLine($"[bold red]✖[/] [dim] {check.DisplayName}:[/] {statusDisplay}");
 					}
 				}
 			}
 
-			// --- C. Estado Global de la Fila ---
-			bool rowPassed = templatePassed;
+			// --- C. Lógica de Estado Global (Status Column) ---
 
-			// Si no pasa la identidad Y no se permite la identidad desconocida (caso CHECK con template), falla la fila.
-			if (!identityPassed && !allowUnknownIdentity) rowPassed = false;
+			// Si allowUnknownIdentity es true (ej. dry-run o metadata add), identity no bloquea el pase global
+			bool identityIsFail = !identityPassed && !allowUnknownIdentity;
+			bool templateIsFail = !templatePassed;
+
+			bool rowPassed = !identityIsFail && !templateIsFail;
 
 			if (!rowPassed) overallSuccess = false;
 
-			// *** Aplicación de Markup/Estilo Final para la celda Status ***
 			string statusStyled;
 			if (rowPassed)
 			{
 				if (!identityPassed && allowUnknownIdentity)
-					statusStyled = "[bold yellow]⚠️ OK (Identity Missing)[/]"; // Si se permite, es OK pero con Warning
+					statusStyled = "[bold yellow]⚠️ Warn (Identity)[/]";
 				else
 					statusStyled = "[bold green]✅ OK[/]";
 			}
 			else
 			{
-				// Mejora: Indica la causa principal del fallo
-				string reason = !templatePassed ? "Template" : "Identity";
-				statusStyled = $"[bold red]❌ KO ({reason})[/]";
+				// AQUÍ ESTÁ EL CAMBIO VISUAL QUE PEDÍAS
+				if (identityIsFail && templateIsFail)
+					statusStyled = "[bold red]❌ KO (Both)[/]";
+				else if (identityIsFail)
+					statusStyled = "[bold red]❌ KO (Identity)[/]";
+				else // templateIsFail
+					statusStyled = "[bold red]❌ KO (Template)[/]";
 			}
 
-			// --- D. Construcción de Celdas ---
+			// --- D. Construcción de filas para la tabla ---
 			var row = new List<string>
 			{
-				// Aseguramos que solo la ruta esté en la primera celda.
-				photo.PhotoFile.SourceFullPath.EscapeMarkup(),
-				statusStyled, // Ya viene con el Markup final
+				Markup.Escape(photo.PhotoFile.SourceFullPath), // Solo nombre o ruta según prefieras
+				statusStyled
 			};
 
-			// Columna Media Identity
 			if (showIdentityColumn)
 			{
 				if (showIdentityDetails)
-				{
 					row.Add(identityBuilder.ToString());
-				}
 				else
-				{
-					// Modo Resumen (Identity)
-					row.Add(identityPassed ? "[green]✅ Valid[/]" : "[red]❌ Invalid[/]");
-				}
+					row.Add(identityPassed ? "[green]Valid[/]" : "[red]Invalid[/]");
 			}
 
-			// Columna Template Tags
 			if (showTemplateColumn)
 			{
 				if (showTemplateDetails)
 				{
-					// Modo Detalle
 					var templateBuilder = new StringBuilder();
-					foreach (var kvp in checkResults)
+					foreach (var tag in templateTags)
 					{
-						var tag = templateTags.First(t => t.Name.Equals(kvp.Key, StringComparison.OrdinalIgnoreCase));
-						var check = kvp.Value;
+						// Solo mostramos los tags del template, no los de sistema que acabamos de añadir
+						if (!checkResults.TryGetValue(tag.Name, out var check)) continue;
 
-						// 1. Símbolo Requerido (Usando el asterisco *)
-						var reqStatus = tag.Required
-							? "[bold red]*[/]"
-							: "[dim]*[/]";
+						var reqStatus = tag.Required ? "[red]*[/]" : "[dim]*[/]";
 
-						// 2. Construcción del nombre del Tag
-						// Añadimos un espacio entre el símbolo y el nombre del tag.
-						templateBuilder.Append($"{reqStatus} [teal]{tag.Name.EscapeMarkup()}[/]: ");
-
-						// 3. Display del Valor
 						string valueToDisplay;
-						if (!check.HasValue)
-						{
-							// Mejora: Faltante obligatorio tiene fondo rojo
-							valueToDisplay = check.Required
-								? "[bold white on red]MISSING![/]"
-								: "[dim](Empty)[/]";
-						}
-						else if (check.Value.Length > MaxValueDisplayLength)
-						{
-							valueToDisplay = $"[cyan]{check.Value[..MaxValueDisplayLength].EscapeMarkup()}...[/]";
-						}
+						if (!check.IsValid) // Falló
+							valueToDisplay = check.HasValue ? $"[red]{check.Value.EscapeMarkup()}[/]" : "[bold white on red]MISSING[/]";
 						else
-						{
-							valueToDisplay = $"[cyan]{check.Value.EscapeMarkup()}[/]";
-						}
+							valueToDisplay = string.IsNullOrEmpty(check.Value) ? "[dim](Empty)[/]" : $"[cyan]{check.Value.EscapeMarkup()}[/]";
 
-						templateBuilder.AppendLine(valueToDisplay);
+						templateBuilder.AppendLine($"{reqStatus} [teal]{tag.Name.EscapeMarkup()}[/]: {valueToDisplay}");
 					}
 					row.Add(templateBuilder.ToString());
 				}
 				else
 				{
-					// Modo Resumen (Template)
-					row.Add(templatePassed ? "[green]✅ Valid[/]" : "[red]❌ Invalid[/]");
+					row.Add(templatePassed ? "[green]Valid[/]" : "[red]Invalid[/]");
 				}
 			}
 
@@ -532,26 +484,14 @@ public class MetadataService : IMetadataService
 			result[photo.PhotoFile.SourceFullPath] = checkResults;
 		}
 
-		// 4. Salida en la Consola (Tabla Final)
-
+		// 4. Escribir Tabla
 		_consoleWriter.WriteMarkup("[dim] [/]");
-
-		// *** CAMBIO: Llamada a WriteTable (esperando que IConsoleWriter haya sido corregido) ***
-		_consoleWriter.WriteTable(columns, rows, $"Metadata Validation Report: {contextName}");
-
+		_consoleWriter.WriteTable(columns, rows, $"Metadata Check: {contextName}");
 		_consoleWriter.WriteMarkup("[dim] [/]");
-
-		if (overallSuccess)
-		{
-			_consoleWriter.WriteMarkup("✨ [bold green]All files passed the required metadata check.[/]");
-		}
-		else
-		{
-			_consoleWriter.WriteError("⚠️ One or more files failed the required metadata check. Check the 'Status' column for details.");
-		}
 
 		return result;
 	}
+
 
 	#endregion
 

@@ -220,34 +220,107 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 	}
 
 	/// <summary>
-	/// Escribe un resumen de los resultados de la operación 'check' usando la nueva tupla (IsValid).
-	/// NOTA: La tabla de detalles se imprime en MetadataService.CheckMetadataFromTemplate.
+	/// Escribe un resumen estadístico detallado de los resultados de la validación.
 	/// </summary>
 	private void LogCheckSummary(IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool IsRequired, bool IsValid)>> results)
 	{
 		if (results == null || results.Count == 0)
 		{
-			_consoleWriter.Write("[dim]Metadata check completed. No files processed.[/]");
+			_consoleWriter.Write("[dim]No processed files to summarize.[/]");
 			return;
 		}
 
 		var totalFiles = results.Count;
-		// Un archivo falla si CUALQUIERA de sus tags (Value) es !IsValid
-		var filesFailed = results.Count(r => r.Value.Any(kv => !kv.Value.IsValid));
-		var filesPassed = totalFiles - filesFailed;
 
-		_consoleWriter.WriteMarkup("[dim] [/]"); // Separador sutil
+		// Contadores generales
+		var passedFiles = 0;
+		var failedFiles = 0;
 
-		// CORRECCIÓN: Resumen final estilizado
-		_consoleWriter.WriteMarkup("\n--- [bold white]Metadata Check Summary[/] ---");
-		_consoleWriter.WriteMarkup($"[dim]Total Files:[/] [bold]{totalFiles}[/]");
-		_consoleWriter.WriteMarkup($"[green]✅ Files Passed Validation:[/] [bold]{filesPassed}[/]");
-		_consoleWriter.WriteMarkup($"[red]🛑 Files Failed Validation:[/] [bold]{filesFailed}[/]");
+		// Contadores de causas de fallo
+		var failedByIdentity = 0;
+		var failedByTemplate = 0;
 
-		if (filesFailed > 0)
+		// Contadores específicos de Identidad (usando las claves [System] que inyectamos)
+		var missingTakenDate = 0;
+		var missingDevice = 0;
+		var missingAuthor = 0;
+		var missingMakeModel = 0;
+
+		foreach (var fileResult in results.Values)
 		{
-			// CORRECCIÓN: Instrucción estilizada
-			_consoleWriter.WriteError("[yellow]Review the table above for details on which files failed and why.[/]");
+			// 1. Analizar Identidad (Tags que empiezan por [System])
+			var identityTags = fileResult.Where(kv => kv.Key.StartsWith("[System]")).ToList();
+			var identityOk = identityTags.All(kv => kv.Value.IsValid);
+
+			// 2. Analizar Template (Tags normales)
+			var templateTags = fileResult.Where(kv => !kv.Key.StartsWith("[System]")).ToList();
+			var templateOk = templateTags.All(kv => kv.Value.IsValid);
+
+			if (identityOk && templateOk)
+			{
+				passedFiles++;
+			}
+			else
+			{
+				failedFiles++;
+				if (!identityOk) failedByIdentity++;
+				if (!templateOk) failedByTemplate++; // Nota: Un archivo puede fallar por ambos
+			}
+
+			// 3. Drill-down de errores de identidad
+			// Buscamos si el tag específico es inválido
+			if (IsSystemTagInvalid(fileResult, "TakenDate")) missingTakenDate++;
+			if (IsSystemTagInvalid(fileResult, "Device")) missingDevice++;
+			if (IsSystemTagInvalid(fileResult, "Author")) missingAuthor++;
+			if (IsSystemTagInvalid(fileResult, "Make") || IsSystemTagInvalid(fileResult, "Model")) missingMakeModel++;
 		}
+
+		var rule = new Rule("[bold]COMMAND RESULT[/]");
+		rule.Justification = Justify.Center;
+		rule.Style = new Style(foreground: Color.Yellow);
+		AnsiConsole.Write(rule);
+
+		_consoleWriter.WriteMarkup($"[yellow]Total Files processed:[/] [bold]{totalFiles}[/]");
+
+		if (passedFiles == totalFiles)
+		{
+			_consoleWriter.WriteMarkup($"[green]✅ All files passed validation.[/]");
+			return;
+		}
+
+		_consoleWriter.WriteMarkup($"[green]✅ Passed:[/] {passedFiles}");
+		_consoleWriter.WriteMarkup($"[red]🛑 Failed:[/] {failedFiles}");
+
+		if (failedByIdentity > 0 || failedByTemplate > 0)
+			_consoleWriter.WriteMarkup("\n[bold underline]Failure Breakdown:[/]");
+
+		if (failedByIdentity > 0)
+			_consoleWriter.WriteMarkup($"• [yellow]Required Data (Identity) Missing:[/] [bold red]{failedByIdentity}[/] files");
+
+		if (failedByTemplate > 0)
+			_consoleWriter.WriteMarkup($"• [yellow]Required Tags (Template) Missing:[/] [bold red]{failedByTemplate}[/] files");
+
+		// Mostrar detalle de Identidad solo si hay fallos ahí
+		if (failedByIdentity > 0)
+		{
+			_consoleWriter.WriteMarkup("\n[bold underline]Missing Identity Data Details:[/]");
+			if (missingTakenDate > 0) _consoleWriter.WriteMarkup($"  - Missing Taken Date: [red]{missingTakenDate}[/]");
+			if (missingMakeModel > 0) _consoleWriter.WriteMarkup($"  - Missing Make/Model: [red]{missingMakeModel}[/]");
+			if (missingDevice > 0) _consoleWriter.WriteMarkup($"  - Missing Device ID:  [red]{missingDevice}[/]");
+			if (missingAuthor > 0) _consoleWriter.WriteMarkup($"  - Missing Author ID:  [red]{missingAuthor}[/]");
+		}
+
+		_consoleWriter.WriteMarkup("\n[yellow]Review the table above for specific file details.[/]");
+	}
+
+	private bool IsSystemTagInvalid(IReadOnlyDictionary<string, (bool HasValue, string Value, bool IsRequired, bool IsValid)> result, string keySuffix)
+	{
+		// Busca la clave completa ej: "[System] Device"
+		var key = $"[System] {keySuffix}";
+		if (result.TryGetValue(key, out var val))
+		{
+			return !val.IsValid;
+		}
+		return false; // Si no existe la clave por alguna razón, no contamos error aquí para no duplicar lógica
 	}
 }
