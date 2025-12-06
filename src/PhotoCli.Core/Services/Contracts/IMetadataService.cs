@@ -1,5 +1,6 @@
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Models.Enums;
+using System.Collections.Generic; // Necesario para IReadOnlyCollection
 
 namespace PhotoCli.Core.Services.Contracts;
 
@@ -11,7 +12,14 @@ public interface IMetadataService
 	/// <summary>
 	/// Añade metadatos basados en un template, resolviendo las variables directamente desde el objeto Photo.
 	/// </summary>
-	IReadOnlyCollection<Photo> AddMetadataFromTemplate(IReadOnlyCollection<Photo> photos, string templateName, bool isDryRun = false);
+	/// <param name="overwriteTags">Indica si los tags existentes deben ser sobrescritos.</param>
+	/// <param name="allowUnknownIdentity">Permite procesar archivos aunque falten datos de identidad (Author/Device) obligatorios.</param>
+	IReadOnlyCollection<Photo> AddMetadataFromTemplate(
+		IReadOnlyCollection<Photo> photos,
+		string templateName,
+		bool isDryRun = false,
+		bool overwriteTags = false,
+		bool allowUnknownIdentity = false);
 	#endregion
 
 	#region BORRADO (Delete)
@@ -35,7 +43,16 @@ public interface IMetadataService
 	#endregion
 
 	#region VALIDACIÓN (Check)
-	IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>> CheckMetadataFromTemplate(IReadOnlyCollection<Photo> photos, string templateName, IReadOnlyCollection<MetadataCheckViewType> metadataViewTypes);
-	IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>> CheckMetadata(IReadOnlyCollection<Photo> photos, string metadataKey, bool isRequired = true);
+	/// <summary>
+	/// Realiza la validación de un template contra una colección de fotos.
+	/// </summary>
+	/// <param name="allowUnknownIdentity">Permite que el chequeo de identidad pase si Author/Device es 'Unknown'.</param>
+	IReadOnlyDictionary<string, FileValidationResult> CheckMetadataFromTemplate( // <-- CAMBIO DE TIPO DE RETORNO
+		IReadOnlyCollection<Photo> photos,
+		string templateName,
+		IReadOnlyCollection<MetadataCheckViewType> metadataViewTypes,
+		bool allowUnknownIdentity = false);
+
+	IReadOnlyDictionary<string, FileValidationResult> CheckMetadata(IReadOnlyCollection<Photo> photos, string metadataKey, bool isRequired = true); // <-- CAMBIO DE TIPO DE RETORNO
 	#endregion
 }

@@ -33,9 +33,13 @@
       "commandName": "Project",
       "commandLineArgs": "copy --process-type FlattenAllSubFolders --group-by DecadeYearYearShortMonthNameYearMonthDay --naming-style DateTimeWithSubsecondsAuthorDevice --number-style OnlySequentialNumbers --no-device InSubFolder -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -o \"C:\\Work\\Photography\\Test\\Photo-cli\\Photo-Video\" -d"
     },
-    "Metadata - PC - 1. Check (Template)": {
+    "Metadata - PC - 1.1 Check (Template)": {
       "commandName": "Project",
       "commandLineArgs": "metadata --operation check --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --view IdentityDetails TemplateDetails"
+    },
+    "Metadata - PC - 1.2 Check (Template) - Allow Unknown Identity": {
+      "commandName": "Project",
+      "commandLineArgs": "metadata --operation check --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --view IdentityDetails TemplateDetails --allow-unknown-identity"
     },
     "Metadata - PC - 2. Get (Template)": {
       "commandName": "Project",

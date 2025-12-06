@@ -127,6 +127,12 @@ internal static class OptionNames
 	internal const char ViewOptionNameShort = 'v';
 	internal const string ViewOptionNameLong = "view";
 
+	//internal const char AllowUnknownIdentityNameShort = '';
+	internal const string AllowUnknownIdentityNameLong = "allow-unknown-identity";
+
+	//internal const char OverwriteTagsNameShort = '';
+	internal const string OverwriteTagsNameLong = "overwrite-tags";
+
 	#endregion
 
 

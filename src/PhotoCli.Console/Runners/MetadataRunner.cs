@@ -5,9 +5,10 @@ using PhotoCli.Console.Options;
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Models.Enums;
 using PhotoCli.Core.Services.Contracts;
-using Spectre.Console; // Necesario para Markup.Escape
-using System.Linq; // Necesario para .Any() y .ToList()
-using System; // Necesario para Environment
+using Spectre.Console;
+using System.Linq;
+using System;
+using System.Threading.Tasks;
 
 namespace PhotoCli.Console.Runners;
 
@@ -41,21 +42,19 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 
 	public async Task<ExitCode> Execute()
 	{
-		// *** CAMBIO: Resumen del comando (Punto 1) ***
-		// Usamos el nombre de la operación y el path de entrada
+		// Resumen del comando
 		var commandName = $"METADATA {_options.Operation.ToString().ToUpper()}";
 		var sourcePath = _options.InputPath ?? Environment.CurrentDirectory;
 
-		// NOTA: Si usas InputFiles, puedes ajustar sourcePath o usar "Input Files"
 		if (_options.InputFiles?.Any() == true)
 		{
-			sourcePath = "Input File List"; // O la ruta de la primera carpeta
+			sourcePath = "Input File List";
 		}
 
 		_consoleWriter.WriteCommandSummary(
 			commandName,
 			sourcePath,
-			_options.Template // Pasa el template si existe
+			_options.Template
 		);
 
 		// 1. Get Photos
@@ -89,10 +88,10 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 			}
 		}
 
-		// 2. Añadimos EXIF Data (Restaurado)
+		// 2. Añadimos EXIF Data
 		photos = _exifDataAppenderService.ExtractExifData(photos, out var allPhotosAreValid, out var allPhotosHasPhotoTaken, out var allPhotosHasCoordinate, out var allPhotosHasMakeModel, out var allPhotosHasSubseconds, out var allPhotosHasOriginalFileName);
 
-		// 3. Añadimos Media Identity (Restaurado)
+		// 3. Añadimos Media Identity
 		photos = _mediaIdentityAppenderService.AppendMediaIdentity(photos, out allPhotosAreValid, out var allPhotosHasAuthor, out var allPhotosHasDevice);
 
 		// 4. Ejecutar operación de metadata
@@ -106,7 +105,12 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 				case MetadataOperation.Add:
 					if (!string.IsNullOrWhiteSpace(_options.Template))
 					{
-						_metadataService.AddMetadataFromTemplate(photos, _options.Template, _options.IsDryRun);
+						_metadataService.AddMetadataFromTemplate(
+							photos,
+							_options.Template,
+							_options.IsDryRun,
+							_options.OverwriteTags,
+							_options.AllowUnknownIdentity);
 					}
 					else if (!string.IsNullOrWhiteSpace(_options.Key) && _options.Value != null)
 					{
@@ -127,7 +131,7 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 					{
 						_metadataService.DeleteMetadata(photos, _options.Key, _options.IsDryRun);
 					}
-					else if (!string.IsNullOrWhiteSpace(_options.Template)) // Añadimos opción para borrar por template
+					else if (!string.IsNullOrWhiteSpace(_options.Template))
 					{
 						_metadataService.DeleteMetadataFromTemplate(photos, _options.Template, _options.IsDryRun);
 					}
@@ -155,7 +159,6 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 						_logger.LogError("Operation 'get' requires either '--key' or '--template'.");
 						return ExitCode.InvalidMetadataOperationValue;
 					}
-					// CORRECCIÓN: Usar mensaje estilizado
 					_consoleWriter.Write("[bold green]Metadata retrieval finished.[/] See output log for details.");
 					break;
 
@@ -163,28 +166,29 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 				// photo-cli metadata check ...
 				// ----------------------------------------------------
 				case MetadataOperation.Check:
-					IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool IsRequired, bool IsValid)>> checkResults;
+					// FIRMA MODIFICADA PARA USAR LA NUEVA ESTRUCTURA
+					IReadOnlyDictionary<string, FileValidationResult> checkResults;
 
 					var viewTypes = _options.View.ToList();
 
 					if (!string.IsNullOrWhiteSpace(_options.Template))
 					{
-						// LÓGICA DE VALOR POR DEFECTO: Si Template se usa y NO hay opciones de vista, forzar Template (resumen).
 						if (!viewTypes.Any())
 						{
 							viewTypes.Add(MetadataCheckViewType.Template);
 						}
 
+						// ASUMIMOS que CheckMetadataFromTemplate ahora devuelve IReadOnlyDictionary<string, FileValidationResult>
 						checkResults = _metadataService.CheckMetadataFromTemplate(
 							photos,
 							_options.Template,
-							viewTypes.AsReadOnly()
+							viewTypes.AsReadOnly(),
+							_options.AllowUnknownIdentity
 							);
 					}
 					else if (!string.IsNullOrWhiteSpace(_options.Key))
 					{
-						// Para una sola clave, la columna de template siempre aparece y siempre es el detalle
-						// Nota: El isRequired: true se maneja internamente en CheckMetadata
+						// ASUMIMOS que CheckMetadata ahora devuelve IReadOnlyDictionary<string, FileValidationResult>
 						checkResults = _metadataService.CheckMetadata(photos, _options.Key, isRequired: true);
 					}
 					else
@@ -193,7 +197,6 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 						return ExitCode.InvalidMetadataOperationValue;
 					}
 
-					// CORRECCIÓN: El LogCheckSummary ahora sólo resume los números, ya que la tabla se imprime en el servicio.
 					LogCheckSummary(checkResults);
 					break;
 
@@ -202,7 +205,7 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 					return ExitCode.InvalidMetadataOperationValue;
 			}
 		}
-		catch (ArgumentException ex) // Captura "Template not found"
+		catch (ArgumentException ex)
 		{
 			_logger.LogError(ex, "Operation failed: {Message}", ex.Message);
 			return ExitCode.MetadataTemplateNotFound;
@@ -222,7 +225,8 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 	/// <summary>
 	/// Escribe un resumen estadístico detallado de los resultados de la validación.
 	/// </summary>
-	private void LogCheckSummary(IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool IsRequired, bool IsValid)>> results)
+	// FIRMA MODIFICADA
+	private void LogCheckSummary(IReadOnlyDictionary<string, FileValidationResult> results)
 	{
 		if (results == null || results.Count == 0)
 		{
@@ -239,8 +243,9 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 		// Contadores de causas de fallo
 		var failedByIdentity = 0;
 		var failedByTemplate = 0;
+		var allowedUnknownWarnings = 0; // NUEVO CONTADOR PARA ARCHIVOS PERMITIDOS
 
-		// Contadores específicos de Identidad (usando las claves [System] que inyectamos)
+		// Contadores específicos de Identidad
 		var missingTakenDate = 0;
 		var missingDevice = 0;
 		var missingAuthor = 0;
@@ -248,13 +253,13 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 
 		foreach (var fileResult in results.Values)
 		{
-			// 1. Analizar Identidad (Tags que empiezan por [System])
-			var identityTags = fileResult.Where(kv => kv.Key.StartsWith("[System]")).ToList();
-			var identityOk = identityTags.All(kv => kv.Value.IsValid);
+			// 1. Analizar Identidad (Acceso directo a IdentityTags)
+			var identityTags = fileResult.IdentityTags;
+			var identityOk = identityTags.Values.All(tv => tv.IsValid);
 
-			// 2. Analizar Template (Tags normales)
-			var templateTags = fileResult.Where(kv => !kv.Key.StartsWith("[System]")).ToList();
-			var templateOk = templateTags.All(kv => kv.Value.IsValid);
+			// 2. Analizar Template (Acceso directo a TemplateTags)
+			var templateTags = fileResult.TemplateTags;
+			var templateOk = templateTags.Values.All(tv => tv.IsValid);
 
 			if (identityOk && templateOk)
 			{
@@ -264,15 +269,35 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 			{
 				failedFiles++;
 				if (!identityOk) failedByIdentity++;
-				if (!templateOk) failedByTemplate++; // Nota: Un archivo puede fallar por ambos
+				if (!templateOk) failedByTemplate++;
 			}
 
-			// 3. Drill-down de errores de identidad
-			// Buscamos si el tag específico es inválido
-			if (IsSystemTagInvalid(fileResult, "TakenDate")) missingTakenDate++;
-			if (IsSystemTagInvalid(fileResult, "Device")) missingDevice++;
-			if (IsSystemTagInvalid(fileResult, "Author")) missingAuthor++;
-			if (IsSystemTagInvalid(fileResult, "Make") || IsSystemTagInvalid(fileResult, "Model")) missingMakeModel++;
+			// -------------------------------------------------------------------------
+			// AÑADIDO: Detección de Warnings (Archivos ACEPTADOS por allow-unknown-identity)
+			if (identityOk)
+			{
+				var isMissingRelaxedData =
+					IsTagMissingOrUnknown(identityTags, "Make") ||
+					IsTagMissingOrUnknown(identityTags, "Model") ||
+					IsTagMissingOrUnknown(identityTags, "Author") ||
+					IsTagMissingOrUnknown(identityTags, "Device");
+
+				if (isMissingRelaxedData)
+				{
+					allowedUnknownWarnings++;
+				}
+			}
+			// -------------------------------------------------------------------------
+
+			// 3. Drill-down de errores de identidad (Solo fallos críticos)
+			if (!identityOk)
+			{
+				// Usamos los nuevos auxiliares
+				if (IsIdentityTagInvalid(identityTags, "TakenDate")) missingTakenDate++;
+				if (IsIdentityTagInvalid(identityTags, "Device")) missingDevice++;
+				if (IsIdentityTagInvalid(identityTags, "Author")) missingAuthor++;
+				if (IsIdentityTagInvalid(identityTags, "Make") || IsIdentityTagInvalid(identityTags, "Model")) missingMakeModel++;
+			}
 		}
 
 		var rule = new Rule("[bold]COMMAND RESULT[/]");
@@ -300,27 +325,48 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 		if (failedByTemplate > 0)
 			_consoleWriter.WriteMarkup($"• [yellow]Required Tags (Template) Missing:[/] [bold red]{failedByTemplate}[/] files");
 
-		// Mostrar detalle de Identidad solo si hay fallos ahí
 		if (failedByIdentity > 0)
 		{
 			_consoleWriter.WriteMarkup("\n[bold underline]Missing Identity Data Details:[/]");
-			if (missingTakenDate > 0) _consoleWriter.WriteMarkup($"  - Missing Taken Date: [red]{missingTakenDate}[/]");
-			if (missingMakeModel > 0) _consoleWriter.WriteMarkup($"  - Missing Make/Model: [red]{missingMakeModel}[/]");
-			if (missingDevice > 0) _consoleWriter.WriteMarkup($"  - Missing Device ID:  [red]{missingDevice}[/]");
-			if (missingAuthor > 0) _consoleWriter.WriteMarkup($"  - Missing Author ID:  [red]{missingAuthor}[/]");
+			if (missingTakenDate > 0) _consoleWriter.WriteMarkup($"  - Missing Taken Date: [red]{missingTakenDate}[/]");
+			if (missingMakeModel > 0) _consoleWriter.WriteMarkup($"  - Missing Make/Model: [red]{missingMakeModel}[/]");
+			if (missingDevice > 0) _consoleWriter.WriteMarkup($"  - Missing Device ID:  [red]{missingDevice}[/]");
+			if (missingAuthor > 0) _consoleWriter.WriteMarkup($"  - Missing Author ID:  [red]{missingAuthor}[/]");
 		}
+
+		// -------------------------------------------------------------------------
+		// AÑADIDO: Escritura del resumen de Warnings
+		if (allowedUnknownWarnings > 0)
+		{
+			_consoleWriter.WriteMarkup("\n[bold underline]Identity Warnings (Allow Unknown):[/]");
+			_consoleWriter.WriteMarkup($"• [yellow]Files accepted with missing/unknown identity:[/][bold] {allowedUnknownWarnings}[/] files");
+			_consoleWriter.WriteMarkup("  [dim](These files were allowed to pass Identity Check due to the allow-unknown-identity flag)[/]");
+		}
+		// -------------------------------------------------------------------------
 
 		_consoleWriter.WriteMarkup("\n[yellow]Review the table above for specific file details.[/]");
 	}
 
-	private bool IsSystemTagInvalid(IReadOnlyDictionary<string, (bool HasValue, string Value, bool IsRequired, bool IsValid)> result, string keySuffix)
+	// NUEVO MÉTODO AUXILIAR para comprobar la validez en la nueva estructura de identidad
+	private bool IsIdentityTagInvalid(IReadOnlyDictionary<string, TagValidationResult> identityResults, string key)
 	{
-		// Busca la clave completa ej: "[System] Device"
-		var key = $"[System] {keySuffix}";
-		if (result.TryGetValue(key, out var val))
+		if (identityResults.TryGetValue(key, out var val))
 		{
 			return !val.IsValid;
 		}
-		return false; // Si no existe la clave por alguna razón, no contamos error aquí para no duplicar lógica
+		return false;
 	}
+
+	// NUEVO MÉTODO AUXILIAR para comprobar la ausencia de valor (Missing o Unknown)
+	private bool IsTagMissingOrUnknown(IReadOnlyDictionary<string, TagValidationResult> identityResults, string key)
+	{
+		if (identityResults.TryGetValue(key, out var val))
+		{
+			// Se considera missing/unknown si HasValue es False (Missing) O si el valor literal es "Unknown".
+			return !val.HasValue || val.Value.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
+		}
+		return false;
+	}
+
+	// MÉTODO AUXILIAR IsSystemTagInvalid ELIMINADO/REEMPLAZADO
 }

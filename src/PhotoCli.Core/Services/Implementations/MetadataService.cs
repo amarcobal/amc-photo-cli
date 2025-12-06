@@ -9,8 +9,7 @@ using Microsoft.Extensions.Logging;
 using PhotoCli.Core.Models.Enums;
 using System.Collections.Generic;
 using System;
-using PhotoCli.Core.Models.SpectreConsole; // Asegúrate de que esta clase exista y TableColumnConfig esté aquí
-
+using PhotoCli.Core.Models.SpectreConsole;
 
 namespace PhotoCli.Core.Services.Implementations;
 
@@ -35,16 +34,15 @@ public class MetadataService : IMetadataService
 		{ "DeviceAlias", p => p.Device?.Alias },
 		{ "DeviceName", p => p.Device?.Name },
 		
-		// WORKFLOW (Asegúrate de que NewName y TargetRelativePath estén setteados antes por el Runner)
+		// WORKFLOW
 		{ "DerivedFileName", p => p.NewName },
 		{ "DerivedFolderPath", p => p.TargetRelativePath },
 		
-		// ORIGIN (Datos extraídos del ExifData Appender)
+		// ORIGIN
 		{ "TakenDateTime", p => p.TakenDateTime?.ToString("yyyy:MM:dd HH:mm:ss") },
 		{ "OriginalFileName", p => p.OriginalFileName },
 		{ "Make", p => p.Make },
 		{ "Model", p => p.Model },
-		// Agrega aquí cualquier otra propiedad de Photo que uses como SourceType.Variable
 	};
 
 	public MetadataService(
@@ -80,80 +78,124 @@ public class MetadataService : IMetadataService
 	public IReadOnlyCollection<Photo> AddMetadataFromTemplate(
 		IReadOnlyCollection<Photo> photos,
 		string templateName,
-		bool isDryRun = false)
+		bool isDryRun,
+		bool overwriteTags,
+		bool allowUnknownIdentity)
 	{
 		var templateTags = GetTemplateTags(templateName);
-		var processedPhotos = new List<Photo>();
+		var photosToProcess = new List<Photo>();
+
+		var dryRunResults = new Dictionary<string, Dictionary<string, (string Value, string StatusColor)>>();
+		var identityResults = new Dictionary<string, bool>();
+		var identityDetails = new Dictionary<string, string>();
 
 		if (!templateTags.Any())
 		{
-			_logger.LogWarning("Template '{Template}' no tiene tags definidos. Operación abortada.", templateName);
+			_logger.LogWarning("Template '{Template}' no tiene tags definidos.", templateName);
 			return photos;
 		}
 
 		foreach (var photo in photos)
 		{
-			var tagsToWriteForPhoto = new List<KeyValuePair<string, string>>();
-			bool shouldSkipPhoto = false;
+			// 1. Validar Identidad
+			var (identityPassed, identityLog) = ValidateIdentity(photo, allowUnknownIdentity);
 
-			foreach (var tag in templateTags)
+			identityResults[photo.PhotoFile.SourceFullPath] = identityPassed;
+			identityDetails[photo.PhotoFile.SourceFullPath] = identityLog;
+
+			if (!identityPassed)
 			{
-				if (tag.Source.Type == SourceType.Variable)
-				{
-					if (_photoPropertyMap.TryGetValue(tag.Source.ValueKey, out var propertyGetter))
-					{
-						var resolvedValue = propertyGetter(photo);
-
-						if (!string.IsNullOrWhiteSpace(resolvedValue))
-						{
-							tagsToWriteForPhoto.Add(new KeyValuePair<string, string>(tag.Name, resolvedValue));
-						}
-						else if (tag.Required)
-						{
-							_logger.LogError("🛑 Required Variable '{variableKey}' for Metadata key '{TagKey}' not resolved in Photo. Skipping file: {File}", tag.Source.ValueKey, tag.Name, photo.PhotoFile.FileName);
-							shouldSkipPhoto = true;
-							break;
-						}
-					}
-					else
-					{
-						_logger.LogError("🛑 Unknown Variable Key '{variableKey}' in template '{Template}'. Skipping file: {File}", tag.Source.ValueKey, templateName, photo.PhotoFile.FileName);
-						shouldSkipPhoto = true;
-						break;
-					}
-				}
-				else if (tag.Source.Type == SourceType.ExifToolTag)
-				{
-					tagsToWriteForPhoto.Add(new KeyValuePair<string, string>(tag.Name, $"<{tag.Source.ValueKey}"));
-				}
-				else if (tag.Source.Type == SourceType.Literal)
-				{
-					tagsToWriteForPhoto.Add(new KeyValuePair<string, string>(tag.Name, tag.Source.ValueKey));
-				}
-				else
-				{
-					_logger.LogWarning("Tag {Key} en template {Template} tiene una fuente ({SourceType}) desconocida. Saltando.", tag.Name, templateName, tag.Source.Type);
-				}
-			}
-
-			if (shouldSkipPhoto)
-			{
-				_statistics.InternalError++;
+				if (isDryRun) dryRunResults[photo.PhotoFile.SourceFullPath] = new Dictionary<string, (string Value, string StatusColor)>();
+				else _statistics.InternalError++;
 				continue;
 			}
 
-			if (tagsToWriteForPhoto.Any())
+			// 2. Resolver Tags y aplicar lógica de Overwrite
+			var tagsToWriteForPhoto = new List<KeyValuePair<string, string>>();
+			var dryRunFileTags = new Dictionary<string, (string Value, string StatusColor)>();
+			bool templateError = false;
+
+			foreach (var tag in templateTags)
 			{
-				WriteMetadataBatch(new[] { photo }, tagsToWriteForPhoto, $"Template {templateName}", isDryRun);
-				processedPhotos.Add(photo);
+				string? resolvedValue = null;
+
+				// Resolución del valor
+				if (tag.Source.Type == SourceType.Variable)
+				{
+					if (_photoPropertyMap.TryGetValue(tag.Source.ValueKey, out var propertyGetter))
+						resolvedValue = propertyGetter(photo);
+					else
+					{
+						templateError = true;
+						if (isDryRun) dryRunFileTags[tag.Name] = ("Config Error", "red");
+					}
+				}
+				else if (tag.Source.Type == SourceType.ExifToolTag)
+					resolvedValue = $"<{tag.Source.ValueKey}";
+				else if (tag.Source.Type == SourceType.Literal)
+					resolvedValue = tag.Source.ValueKey;
+
+				// Validación del valor resuelto
+				if (string.IsNullOrWhiteSpace(resolvedValue))
+				{
+					if (tag.Required)
+					{
+						templateError = true;
+						if (isDryRun) dryRunFileTags[tag.Name] = ("MISSING", "bold white on red");
+					}
+					else if (isDryRun)
+					{
+						dryRunFileTags[tag.Name] = ("(Empty)", "dim");
+					}
+					continue;
+				}
+
+				// Lógica de Overwrite
+				bool tagExistsInFile = photo.ExifData.Metadata.ContainsKey(tag.Name);
+				bool shouldWrite = !tagExistsInFile || overwriteTags;
+
+				if (shouldWrite)
+				{
+					tagsToWriteForPhoto.Add(new KeyValuePair<string, string>(tag.Name, resolvedValue));
+					if (isDryRun) dryRunFileTags[tag.Name] = (resolvedValue, "cyan"); // Cyan = Nuevo/Update
+				}
+				else
+				{
+					// El tag existe y NO estamos sobrescribiendo
+					if (isDryRun)
+					{
+						var existingVal = photo.ExifData.Metadata[tag.Name];
+						dryRunFileTags[tag.Name] = ($"{existingVal.EscapeMarkup()} (Kept)", "dim");
+					}
+				}
 			}
-			else
+
+			if (isDryRun)
 			{
-				_logger.LogWarning("No se resolvieron tags válidos para escribir en {File} (Template: {Template}).", photo.PhotoFile.FileName, templateName);
+				dryRunResults[photo.PhotoFile.SourceFullPath] = dryRunFileTags;
+			}
+
+			if (identityPassed && !templateError)
+			{
+				if (!isDryRun && tagsToWriteForPhoto.Any())
+				{
+					WriteMetadataBatch(new[] { photo }, tagsToWriteForPhoto, $"Template {templateName}", isDryRun: false);
+					photosToProcess.Add(photo);
+				}
+			}
+			else if (!isDryRun)
+			{
+				_statistics.InternalError++;
 			}
 		}
 
-		return processedPhotos;
+		// 3. Visualización de la Tabla (Solo DryRun)
+		if (isDryRun)
+		{
+			PrintAddPreviewTable(photos, templateTags, dryRunResults, identityResults, identityDetails, templateName, overwriteTags);
+		}
+
+		return photosToProcess;
 	}
 
 	#endregion
@@ -291,35 +333,31 @@ public class MetadataService : IMetadataService
 
 	#region 4. Métodos Públicos - VALIDACIÓN (Check)
 
-	public IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>> CheckMetadata(
+	// CAMBIO DE FIRMA: Ahora devuelve la nueva estructura FileValidationResult
+	public IReadOnlyDictionary<string, FileValidationResult> CheckMetadata(
 		IReadOnlyCollection<Photo> photos, string metadataKey, bool isRequired = true)
 	{
-		var singleTagList = new List<TemplateTag>
-		{
-			new() { Name = metadataKey, Required = isRequired }
-		};
-
-		// Para una sola clave, se asume que se quiere ver la columna, el detalle y no hay columna Identity.
-		// Usamos un valor fijo para simplificar, ya que no se usa --view
+		var singleTagList = new List<TemplateTag> { new() { Name = metadataKey, Required = isRequired } };
 		var defaultView = new List<MetadataCheckViewType> { MetadataCheckViewType.TemplateDetails }.AsReadOnly();
-
-		return CheckMetadataFromTemplate(photos, singleTagList, $"Key {metadataKey}", defaultView, allowUnknownIdentity: true);
+		return CheckMetadataFromTemplateBase(photos, singleTagList, $"Key {metadataKey}", defaultView, allowUnknownIdentity: true);
 	}
 
-	public IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>> CheckMetadataFromTemplate(
+	// CAMBIO DE FIRMA: Ahora devuelve la nueva estructura FileValidationResult
+	public IReadOnlyDictionary<string, FileValidationResult> CheckMetadataFromTemplate(
 		IReadOnlyCollection<Photo> photos,
 		string templateName,
-		IReadOnlyCollection<MetadataCheckViewType> viewTypes)
+		IReadOnlyCollection<MetadataCheckViewType> viewTypes,
+		bool allowUnknownIdentity)
 	{
 		var templateTags = GetTemplateTags(templateName);
-		// Asumimos aquí que si el comando es CHECK, Identity NO debe ser desconocido (false)
-		return CheckMetadataFromTemplate(photos, templateTags, $"Template {templateName}", viewTypes, allowUnknownIdentity: false);
+		return CheckMetadataFromTemplateBase(photos, templateTags, $"Template {templateName}", viewTypes, allowUnknownIdentity);
 	}
 
 	/// <summary>
 	/// MÉTODO BASE DE VALIDACIÓN
 	/// </summary>
-	private IReadOnlyDictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>> CheckMetadataFromTemplate(
+	// CAMBIO DE FIRMA: Ahora devuelve la nueva estructura FileValidationResult
+	private IReadOnlyDictionary<string, FileValidationResult> CheckMetadataFromTemplateBase(
 		IReadOnlyCollection<Photo> photos,
 		IReadOnlyCollection<TemplateTag> templateTags,
 		string contextName,
@@ -332,32 +370,29 @@ public class MetadataService : IMetadataService
 		bool showIdentityColumn = viewTypes.Contains(MetadataCheckViewType.Identity) || viewTypes.Contains(MetadataCheckViewType.IdentityDetails);
 		bool showIdentityDetails = viewTypes.Contains(MetadataCheckViewType.IdentityDetails);
 
-		var result = new Dictionary<string, IReadOnlyDictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>>(StringComparer.OrdinalIgnoreCase);
+		// CAMBIO DE TIPO DE RESULTADO
+		var result = new Dictionary<string, FileValidationResult>(StringComparer.OrdinalIgnoreCase);
 
 		// 2. Definición de Columnas
 		var columns = new List<TableColumnConfig>
 		{
 			new() { HeaderText = "File", Width = 40, NoWrap = false },
-			new() { HeaderText = "Status", Width = 18, NoWrap = true } // Aumentamos un poco el ancho para "KO (Identity)"
+			new() { HeaderText = "Status", Width = 18, NoWrap = true }
 		};
 
-		if (showIdentityColumn)
-			columns.Add(new() { HeaderText = "Media Identity", Width = 40, NoWrap = false });
-
-		if (showTemplateColumn)
-			columns.Add(new() { HeaderText = $"Tags: {contextName.Replace("Template ", "").Trim()}", NoWrap = true, Width = null });
+		if (showIdentityColumn) columns.Add(new() { HeaderText = "Media Identity", NoWrap = false, Width = showIdentityDetails ? null : 40 });
+		if (showTemplateColumn) columns.Add(new() { HeaderText = $"Tags: {contextName.Replace("Template ", "").Trim()}", NoWrap = true, Width = null });
 
 		var rows = new List<List<string>>();
-		bool overallSuccess = true;
-		const int MaxValueDisplayLength = 30;
 
 		// 3. Procesamiento
 		foreach (var photo in photos)
 		{
-			// --- A. Validación de Template Tags ---
-			var checkResults = new Dictionary<string, (bool HasValue, string Value, bool Required, bool IsValid)>(StringComparer.OrdinalIgnoreCase);
+			var templateCheckResults = new Dictionary<string, TagValidationResult>(StringComparer.OrdinalIgnoreCase);
+			var identityCheckResults = new Dictionary<string, TagValidationResult>(StringComparer.OrdinalIgnoreCase);
 			var photoMetadataDict = photo.ExifData.Metadata;
 
+			// --- A. Validación de Template Tags ---
 			foreach (var tag in templateTags)
 			{
 				bool hasValue = photoMetadataDict.TryGetValue(tag.Name, out var value) &&
@@ -365,91 +400,76 @@ public class MetadataService : IMetadataService
 							!value.Equals("undefined", StringComparison.OrdinalIgnoreCase);
 
 				bool isValid = hasValue || !tag.Required;
-				checkResults[tag.Name] = (hasValue, value ?? string.Empty, tag.Required, isValid);
-			}
 
-			bool templatePassed = checkResults.All(kv => kv.Value.IsValid);
+				// USAMOS LA NUEVA ESTRUCTURA
+				templateCheckResults[tag.Name] = new TagValidationResult(hasValue, value ?? string.Empty, tag.Required, isValid);
+			}
+			bool templatePassed = templateCheckResults.Values.All(tv => tv.IsValid);
 
 			// --- B. Validación de Identidad ---
+			var (identityPassed, identityLog) = ValidateIdentity(photo, allowUnknownIdentity);
+
+			// --- B.1. Inyección de resultados de Identidad en el nuevo diccionario (SIN [System]) ---
+			bool isRequiredForCheck(string key, bool allowUnknown) => key == "TakenDate" || !allowUnknown;
+
 			var identityChecks = new (string Key, Func<Photo, string?> Getter, string DisplayName, bool IsExif)[]
 			{
 				("TakenDate", p => p.TakenDateTime?.ToString("yyyy-MM-dd HH:mm:ss"), "Taken Date", true),
-				("Make",      p => p.Make, "Make", true),
-				("Model",     p => p.Model, "Model", true),
-				("Author",    p => p.Author?.ID, "Author", false),
-				("Device",    p => p.Device?.ID, "Device", false)
+				("Make", p => p.Make, "Make", true),
+				("Model", p => p.Model, "Model", true),
+				("Author", p => p.Author?.ID, "Author", false),
+				("Device", p => p.Device?.ID, "Device", false)
 			};
-
-			bool identityPassed = true;
-			var identityBuilder = new StringBuilder();
 
 			foreach (var check in identityChecks)
 			{
 				var val = check.Getter(photo);
 				bool isUnknown = !check.IsExif && val == "Unknown";
-				bool ok = !string.IsNullOrWhiteSpace(val) && !isUnknown;
+				bool hasValue = !string.IsNullOrWhiteSpace(val) && val != "Unknown";
 
-				if (!ok) identityPassed = false;
+				// 1. Determinar si el campo es requerido para esta ejecución (CORRECCIÓN isRequired)
+				bool required = isRequiredForCheck(check.Key, allowUnknownIdentity);
 
-				// *** IMPORTANTE: Añadimos el resultado de identidad al diccionario de resultados ***
-				// Usamos un prefijo especial "[System]" para que el Runner pueda distinguirlos y contarlos,
-				// pero no se mezclen con los tags del template si alguien itera ciegamente.
-				checkResults[$"[System] {check.Key}"] = (ok, val ?? "", true, ok);
+				// 2. Determinar la validez
+				bool isValidCheck;
+				if (check.Key == "TakenDate") isValidCheck = hasValue;
+				else isValidCheck = hasValue || allowUnknownIdentity;
 
-				if (showIdentityDetails)
-				{
-					if (ok)
-						identityBuilder.AppendLine($"[green]✔[/] [dim] {check.DisplayName}:[/] [cyan]{val!.EscapeMarkup()}[/]");
-					else
-					{
-						string statusDisplay = isUnknown ? "[yellow]Unknown[/]" : "[bold white on red]MISSING[/]";
-						identityBuilder.AppendLine($"[bold red]✖[/] [dim] {check.DisplayName}:[/] {statusDisplay}");
-					}
-				}
+				// 3. Creación del TagValidationResult
+				identityCheckResults[check.Key] = new TagValidationResult(
+					hasValue,
+					val ?? string.Empty,
+					IsRequired: required, // <-- CORRECCIÓN APLICADA
+					IsValid: isValidCheck);
 			}
 
 			// --- C. Lógica de Estado Global (Status Column) ---
-
-			// Si allowUnknownIdentity es true (ej. dry-run o metadata add), identity no bloquea el pase global
-			bool identityIsFail = !identityPassed && !allowUnknownIdentity;
+			bool identityIsFail = !identityPassed;
 			bool templateIsFail = !templatePassed;
-
 			bool rowPassed = !identityIsFail && !templateIsFail;
-
-			if (!rowPassed) overallSuccess = false;
 
 			string statusStyled;
 			if (rowPassed)
 			{
-				if (!identityPassed && allowUnknownIdentity)
-					statusStyled = "[bold yellow]⚠️ Warn (Identity)[/]";
+				if (identityLog.Contains("[yellow]"))
+					statusStyled = "[bold yellow]△ Warn (Identity)[/]";
 				else
-					statusStyled = "[bold green]✅ OK[/]";
+					statusStyled = "[bold green]✔ OK[/]";
 			}
 			else
 			{
-				// AQUÍ ESTÁ EL CAMBIO VISUAL QUE PEDÍAS
-				if (identityIsFail && templateIsFail)
-					statusStyled = "[bold red]❌ KO (Both)[/]";
-				else if (identityIsFail)
-					statusStyled = "[bold red]❌ KO (Identity)[/]";
-				else // templateIsFail
-					statusStyled = "[bold red]❌ KO (Template)[/]";
+				if (identityIsFail && templateIsFail) statusStyled = "[bold red]❌ KO (Both)[/]";
+				else if (identityIsFail) statusStyled = "[bold red]❌ KO (Identity)[/]";
+				else statusStyled = "[bold red]❌ KO (Template)[/]";
 			}
 
 			// --- D. Construcción de filas para la tabla ---
-			var row = new List<string>
-			{
-				Markup.Escape(photo.PhotoFile.SourceFullPath), // Solo nombre o ruta según prefieras
-				statusStyled
-			};
+			var row = new List<string> { Markup.Escape(photo.PhotoFile.SourceFullPath), statusStyled };
 
 			if (showIdentityColumn)
 			{
-				if (showIdentityDetails)
-					row.Add(identityBuilder.ToString());
-				else
-					row.Add(identityPassed ? "[green]Valid[/]" : "[red]Invalid[/]");
+				if (showIdentityDetails) row.Add(identityLog);
+				else row.Add(identityPassed ? "[green]Valid[/]" : "[red]Invalid[/]");
 			}
 
 			if (showTemplateColumn)
@@ -459,29 +479,27 @@ public class MetadataService : IMetadataService
 					var templateBuilder = new StringBuilder();
 					foreach (var tag in templateTags)
 					{
-						// Solo mostramos los tags del template, no los de sistema que acabamos de añadir
-						if (!checkResults.TryGetValue(tag.Name, out var check)) continue;
-
+						var check = templateCheckResults[tag.Name];
 						var reqStatus = tag.Required ? "[red]*[/]" : "[dim]*[/]";
+						string valDisplay = !check.IsValid
+							? (check.HasValue ? $"[red]{check.Value.EscapeMarkup()}[/]" : "[bold white on red]MISSING[/]")
+							: (check.HasValue ? $"[cyan]{check.Value.EscapeMarkup()}[/]" : "[dim](Empty)[/]");
 
-						string valueToDisplay;
-						if (!check.IsValid) // Falló
-							valueToDisplay = check.HasValue ? $"[red]{check.Value.EscapeMarkup()}[/]" : "[bold white on red]MISSING[/]";
-						else
-							valueToDisplay = string.IsNullOrEmpty(check.Value) ? "[dim](Empty)[/]" : $"[cyan]{check.Value.EscapeMarkup()}[/]";
-
-						templateBuilder.AppendLine($"{reqStatus} [teal]{tag.Name.EscapeMarkup()}[/]: {valueToDisplay}");
+						templateBuilder.AppendLine($"{reqStatus} [teal]{tag.Name.EscapeMarkup()}[/]: {valDisplay}");
 					}
 					row.Add(templateBuilder.ToString());
 				}
-				else
-				{
-					row.Add(templatePassed ? "[green]Valid[/]" : "[red]Invalid[/]");
-				}
+				else row.Add(templatePassed ? "[green]Valid[/]" : "[red]Invalid[/]");
 			}
 
 			rows.Add(row);
-			result[photo.PhotoFile.SourceFullPath] = checkResults;
+
+			// ALMACENAMIENTO DEL RESULTADO FINAL (Nueva Estructura)
+			result[photo.PhotoFile.SourceFullPath] = new FileValidationResult
+			{
+				IdentityTags = identityCheckResults.ToDictionary(kv => kv.Key, kv => kv.Value),
+				TemplateTags = templateCheckResults.ToDictionary(kv => kv.Key, kv => kv.Value)
+			};
 		}
 
 		// 4. Escribir Tabla
@@ -497,6 +515,168 @@ public class MetadataService : IMetadataService
 
 	#region 5. Métodos Privados (Helpers)
 
+	// Helper unificado para validar identidad respetando AllowUnknownIdentity
+	private (bool IsValid, string LogOutput) ValidateIdentity(Photo photo, bool allowUnknown)
+	{
+		var checks = new (string Key, Func<Photo, string?> Getter, string DisplayName, bool IsExif)[]
+		{
+			("TakenDate", p => p.TakenDateTime?.ToString("yyyy-MM-dd HH:mm:ss"), "Taken Date", true),
+			("Make", p => p.Make, "Make", true),
+			("Model", p => p.Model, "Model", true),
+			("Author", p => p.Author?.ID, "Author", false),
+			("Device", p => p.Device?.ID, "Device", false)
+		};
+
+		bool allOk = true;
+		var sb = new StringBuilder();
+
+		foreach (var check in checks)
+		{
+			var val = check.Getter(photo);
+
+			// 1. Determinar el estado del valor
+			bool isUnknown = !check.IsExif && val == "Unknown";
+			bool hasValue = !string.IsNullOrWhiteSpace(val) && val != "Unknown";
+
+			bool isCriticalMissing = !hasValue;
+
+			// 2. Determinar la validez para el chequeo general (allOk)
+			bool isValidCheck;
+
+			if (check.Key == "TakenDate")
+			{
+				isValidCheck = hasValue;
+			}
+			else if (allowUnknown)
+			{
+				isValidCheck = true;
+			}
+			else
+			{
+				isValidCheck = hasValue && !isUnknown;
+			}
+
+			if (!isValidCheck)
+			{
+				allOk = false;
+			}
+
+			// 3. Generación del Log de Salida (usando '△' en lugar de '⚠️')
+			if (isValidCheck)
+			{
+				if (check.Key != "TakenDate" && (isCriticalMissing || isUnknown))
+				{
+					// Es Warning (Permitido) -> Usamos '△'
+					string status = isUnknown ? "Unknown" : "MISSING";
+					sb.AppendLine($"[yellow]✔[/] [dim] {check.DisplayName}:[/] [yellow]{status} (Allowed)[/]");
+				}
+				else
+				{
+					// Es OK -> Usamos '✔'
+					sb.AppendLine($"[green]✔[/] [dim] {check.DisplayName}:[/] [cyan]{val!.EscapeMarkup()}[/]");
+				}
+			}
+			else
+			{
+				// Es un Fallo Fatal (Red) -> Usamos '✖'
+				string statusDisplay;
+				if (check.Key == "TakenDate" && isCriticalMissing)
+				{
+					statusDisplay = "[bold white on red]MISSING (CRITICAL)[/]";
+				}
+				else if (isCriticalMissing)
+				{
+					statusDisplay = "[bold white on red]MISSING[/]";
+				}
+				else
+				{
+					statusDisplay = "[bold red]Unknown (Not Allowed)[/]";
+				}
+				sb.AppendLine($"[bold red]✖[/] [dim]{check.DisplayName}:[/] {statusDisplay}");
+			}
+		}
+
+		return (allOk, sb.ToString());
+	}
+
+
+	// Método específico para pintar la tabla de Add Preview (Dry Run)
+	private void PrintAddPreviewTable(
+		IReadOnlyCollection<Photo> photos,
+		IReadOnlyCollection<TemplateTag> templateTags,
+		Dictionary<string, Dictionary<string, (string Value, string StatusColor)>> dryRunResults,
+		Dictionary<string, bool> identityResults,
+		Dictionary<string, string> identityDetails,
+		string templateName,
+		bool overwriteTags)
+	{
+		var columns = new List<TableColumnConfig>
+		{
+			new() { HeaderText = "File", Width = 40 },
+			new() { HeaderText = "Status", Width = 18, NoWrap = true },
+			new() { HeaderText = "Identity Check", Width = 40 },
+			new() { HeaderText = $"Proposed Tags (Template: {templateName})", Width = null }
+		};
+
+		var rows = new List<List<string>>();
+
+		foreach (var photo in photos)
+		{
+			var path = photo.PhotoFile.SourceFullPath;
+			bool idOk = identityResults.ContainsKey(path) && identityResults[path];
+
+			var tagResults = dryRunResults.ContainsKey(path)
+				? dryRunResults[path]
+				: new Dictionary<string, (string Value, string StatusColor)>();
+
+			// Calcular si faltan tags requeridos
+			bool tagsOk = true;
+			foreach (var t in templateTags)
+			{
+				if (t.Required && (!tagResults.ContainsKey(t.Name) || tagResults[t.Name].StatusColor.Contains("red")))
+					tagsOk = false;
+			}
+
+			string status;
+			if (idOk && tagsOk) status = "[bold green]✅ Ready[/]";
+			else if (!idOk && !tagsOk) status = "[bold red]❌ Skip (Both)[/]";
+			else if (!idOk) status = "[bold red]❌ Skip (Identity)[/]";
+			else status = "[bold red]❌ Skip (Template)[/]";
+
+			// Construir celda de tags propuestos
+			var tagsBuilder = new StringBuilder();
+			foreach (var tag in templateTags)
+			{
+				string line;
+
+				if (tagResults.TryGetValue(tag.Name, out var res))
+				{
+					line = $"[teal]{tag.Name}[/]: [{res.StatusColor}]{res.Value.EscapeMarkup()}[/]";
+				}
+				else if (tag.Required)
+				{
+					line = $"[teal]{tag.Name}[/]: [bold white on red]MISSING CALCULATION[/]";
+				}
+				else continue; // Tag opcional no resuelto, no se muestra
+
+				tagsBuilder.AppendLine(line);
+			}
+
+			rows.Add(new List<string>
+			{
+				Markup.Escape(path),
+				status,
+				identityDetails.ContainsKey(path) ? identityDetails[path] : "",
+				tagsBuilder.ToString()
+			});
+		}
+
+		_consoleWriter.WriteMarkup("\n[bold yellow]--- DRY RUN PREVIEW (No changes applied) ---[/]");
+		if (!overwriteTags) _consoleWriter.WriteMarkup("[dim]Info: --overwrite-tags is OFF. Existing values will be kept.[/]");
+
+		_consoleWriter.WriteTable(columns, rows, $"Metadata Add Simulation: {templateName}");
+	}
+
 	private IReadOnlyCollection<Photo> WriteMetadataBatch(
 		IReadOnlyCollection<Photo> photos,
 		List<KeyValuePair<string, string>> tagsToWrite,
@@ -506,7 +686,6 @@ public class MetadataService : IMetadataService
 		var formattedTags = string.Join(" ", tagsToWrite.Select(t => t.Value.StartsWith('<')
 			? $"-{t.Key}{t.Value}"
 			: $"-{t.Key}='{t.Value.EscapeMarkup()}'"));
-
 
 		foreach (var photo in photos)
 		{

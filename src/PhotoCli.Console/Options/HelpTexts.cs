@@ -107,6 +107,10 @@ public static class HelpTexts
 
 	public const string InputFiles = "(Optional) Specific file paths to process. ( Alternative to '--input' )";
 
+	public const string AllowUnknownIdentity = "(Optional) Add: Proceed writing even if Author/Device is 'Unknown'. Check: Marks status OK even if Identity is Unknown.";
+
+	public const string OverwriteTags = "(Optional) Add: Overwrite existing metadata values. If omitted, existing values are preserved.";
+
 	#endregion
 
 	#region Shared

@@ -1,5 +1,6 @@
 using CommandLine;
 using PhotoCli.Core.Models.Enums;
+using System.Collections.Generic;
 
 namespace PhotoCli.Console.Options;
 
@@ -16,7 +17,10 @@ public class MetadataOptions
 		string? value = null,
 		string? template = null,
 		bool isDryRun = false,
-		IEnumerable<MetadataCheckViewType>? view = null)
+		IEnumerable<MetadataCheckViewType>? view = null,
+		// <--- PARÁMETROS FALTANTES AGREGADOS AQUÍ --->
+		bool allowUnknownIdentity = false,
+		bool overwriteTags = false)
 	{
 		Operation = operation;
 		FolderProcessType = folderProcessType;
@@ -27,6 +31,9 @@ public class MetadataOptions
 		Template = template;
 		IsDryRun = isDryRun;
 		View = view ?? new List<MetadataCheckViewType>();
+		// <--- INICIALIZACIÓN DE LAS PROPIEDADES FALTANTES --->
+		AllowUnknownIdentity = allowUnknownIdentity;
+		OverwriteTags = overwriteTags;
 	}
 
 	#region Required
@@ -65,6 +72,12 @@ public class MetadataOptions
 	public IEnumerable<MetadataCheckViewType> View { get; }
 
 	#endregion
+
+	[Option(OptionNames.AllowUnknownIdentityNameLong, HelpText = HelpTexts.AllowUnknownIdentity)]
+	public bool AllowUnknownIdentity { get; }
+
+	[Option(OptionNames.OverwriteTagsNameLong, HelpText = HelpTexts.OverwriteTags)]
+	public bool OverwriteTags { get; }
 
 	#endregion
 }
