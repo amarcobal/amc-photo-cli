@@ -150,8 +150,8 @@ namespace PhotoCli.Core.Services.Implementations
 				string? originalFileName = null;
 				if (parseOriginalFileName)
 				{
-					originalFileName = metadata.GetString(ExifToolTags.PreservedFileName)
-									 ?? metadata.GetString(ExifToolTags.FileName);
+					originalFileName = metadata.GetString(ExifToolTags.PreservedFileName);
+									 //?? metadata.GetString(ExifToolTags.FileName);
 				}
 
 				// Solo usamos los campos que tu ExifData acepta

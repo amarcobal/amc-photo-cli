@@ -28,4 +28,5 @@ public record PhotoFile
 	public string FileName { get; }
 	public string Extension { get; }
 	public string? Sha1Hash { get; set; }
+	public string FileNameWithExtension => $"{FileName}.{Extension}";
 }

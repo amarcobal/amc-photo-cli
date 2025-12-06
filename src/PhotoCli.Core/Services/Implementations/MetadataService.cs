@@ -39,10 +39,11 @@ public class MetadataService : IMetadataService
 		{ "DerivedFolderPath", p => p.TargetRelativePath },
 		
 		// ORIGIN
-		{ "TakenDateTime", p => p.TakenDateTime?.ToString("yyyy:MM:dd HH:mm:ss") },
-		{ "OriginalFileName", p => p.OriginalFileName },
+		{ "OriginalDateTime", p => p.TakenDateTime?.ToString("yyyy:MM:dd HH:mm:ss") },
+		{ "OriginalFileName", p => p.PhotoFile.FileNameWithExtension },
 		{ "Make", p => p.Make },
 		{ "Model", p => p.Model },
+		{ "OriginalSubseconds", p => p.HasSubSeconds ? p.Subseconds?.Padded() : new SubSeconds("0").Padded() },
 	};
 
 	public MetadataService(
@@ -76,11 +77,11 @@ public class MetadataService : IMetadataService
 	}
 
 	public IReadOnlyCollection<Photo> AddMetadataFromTemplate(
-		IReadOnlyCollection<Photo> photos,
-		string templateName,
-		bool isDryRun,
-		bool overwriteTags,
-		bool allowUnknownIdentity)
+	IReadOnlyCollection<Photo> photos,
+	string templateName,
+	bool isDryRun,
+	bool overwriteTags,
+	bool allowUnknownIdentity)
 	{
 		var templateTags = GetTemplateTags(templateName);
 		var photosToProcess = new List<Photo>();
@@ -117,23 +118,17 @@ public class MetadataService : IMetadataService
 
 			foreach (var tag in templateTags)
 			{
-				string? resolvedValue = null;
+				// --- RESOLUCIÓN DEL VALOR (Usando el Helper Dinámico) ---
+				string? resolvedValue = ResolveTagValue(photo, tag, isDryRun, templateTags);
+				// ---------------------------------------------------------
 
-				// Resolución del valor
-				if (tag.Source.Type == SourceType.Variable)
+				// Manejo de error de configuración (devuelto por el helper)
+				if (resolvedValue == "CONFIG_ERROR")
 				{
-					if (_photoPropertyMap.TryGetValue(tag.Source.ValueKey, out var propertyGetter))
-						resolvedValue = propertyGetter(photo);
-					else
-					{
-						templateError = true;
-						if (isDryRun) dryRunFileTags[tag.Name] = ("Config Error", "red");
-					}
+					templateError = true;
+					if (isDryRun) dryRunFileTags[tag.Name] = ("Config Error", "red");
+					continue;
 				}
-				else if (tag.Source.Type == SourceType.ExifToolTag)
-					resolvedValue = $"<{tag.Source.ValueKey}";
-				else if (tag.Source.Type == SourceType.Literal)
-					resolvedValue = tag.Source.ValueKey;
 
 				// Validación del valor resuelto
 				if (string.IsNullOrWhiteSpace(resolvedValue))
@@ -151,7 +146,8 @@ public class MetadataService : IMetadataService
 				}
 
 				// Lógica de Overwrite
-				bool tagExistsInFile = photo.ExifData.Metadata.ContainsKey(tag.Name);
+				// Usamos el acceso seguro ya que ExifData puede ser null si no hay metadata.
+				bool tagExistsInFile = photo.ExifData?.Metadata.ContainsKey(tag.Name) ?? false;
 				bool shouldWrite = !tagExistsInFile || overwriteTags;
 
 				if (shouldWrite)
@@ -164,7 +160,8 @@ public class MetadataService : IMetadataService
 					// El tag existe y NO estamos sobrescribiendo
 					if (isDryRun)
 					{
-						var existingVal = photo.ExifData.Metadata[tag.Name];
+						// Se asume que photo.ExifData.Metadata[tag.Name] existe aquí debido a tagExistsInFile=true
+						var existingVal = photo.ExifData!.Metadata[tag.Name];
 						dryRunFileTags[tag.Name] = ($"{existingVal.EscapeMarkup()} (Kept)", "dim");
 					}
 				}
@@ -723,6 +720,61 @@ public class MetadataService : IMetadataService
 	private IList<string> GetTagNamesFromTemplate(string templateName)
 	{
 		return GetTemplateTags(templateName).Select(t => t.Name).ToList();
+	}
+
+	// MetadataService.cs - (Dentro de #region 5. Métodos Privados (Helpers))
+
+	private string? ResolveTagValue(
+		Photo photo,
+		TemplateTag tagDefinition,
+		bool isDryRun,
+		IReadOnlyCollection<TemplateTag> allTemplateTags)
+	{
+		// --- 1. Lógica base: Variable de Photo ---
+		if (tagDefinition.Source.Type == SourceType.Variable)
+		{
+			if (_photoPropertyMap.TryGetValue(tagDefinition.Source.ValueKey, out var propertyGetter))
+				return propertyGetter(photo);
+
+			// Error de configuración: ValueKey no existe en _photoPropertyMap
+			return isDryRun ? "CONFIG_ERROR" : null;
+		}
+
+		// --- 2. Lógica base: Valor Literal ---
+		if (tagDefinition.Source.Type == SourceType.Literal)
+		{
+			return tagDefinition.Source.ValueKey;
+		}
+
+		// --- 3. Lógica compleja: Dependencia de otro Tag (ExifToolTag) ---
+		if (tagDefinition.Source.Type == SourceType.ExifToolTag)
+		{
+			if (!isDryRun)
+			{
+				// MODO ESCRITURA: Devolver el comando de copia de tag
+				return $"<{tagDefinition.Source.ValueKey}";
+			}
+
+			// MODO DRY RUN (Simulación de copia):
+
+			// A. Buscar el tag de origen en la definición del template (ej. busca XMP:AMC:Identity:Author:Name)
+			var sourceTag = allTemplateTags
+				.FirstOrDefault(t => t.Name.Equals(tagDefinition.Source.ValueKey, StringComparison.OrdinalIgnoreCase));
+
+			// B. Si el tag de origen está definido en el template (se va a escribir/calcular):
+			if (sourceTag != null)
+			{
+				// ¡Resolución dinámica! Llamar recursivamente para obtener el valor que debería tener el tag de origen.
+				// Esto resuelve la variable interna (AuthorName) que alimenta al tag de origen.
+				return ResolveTagValue(photo, sourceTag, isDryRun, allTemplateTags);
+			}
+
+			// C. Si el tag de origen NO está en el template (se asume que existe en el archivo):
+			// Fallback: Intentar leer el valor actual del tag de origen desde los metadatos leídos.
+			return photo.ExifData?.Metadata.GetString(tagDefinition.Source.ValueKey);
+		}
+
+		return null;
 	}
 
 	#endregion

@@ -66,7 +66,7 @@ public record Photo
 	public string? Make => ExifData?.Make;
 	public bool HasMake => !string.IsNullOrWhiteSpace(Make);
 
-	public string? Model => ExifData?.Make;
+	public string? Model => ExifData?.Model;
 	public bool HasModel => !string.IsNullOrWhiteSpace(Model);
 
 
