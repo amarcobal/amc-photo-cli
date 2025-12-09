@@ -112,7 +112,7 @@ namespace PhotoCli.Core.Services.Implementations
 				SubSeconds? subSeconds = null;
 				if (parseSubseconds)
 				{
-					var ss = metadata.GetString(ExifToolTags.SubSecTimeOriginal);
+					var ss = metadata.GetString(ExifToolTags.MySubseconds);
 					if (!string.IsNullOrWhiteSpace(ss))
 						subSeconds = new SubSeconds(ss);
 				}

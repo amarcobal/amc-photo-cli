@@ -15,7 +15,7 @@ namespace SharpExifTool
 		private const string Arguments = @"-stay_open 1 -@ - -common_args -charset UTF8 -G1 -args";
 		private readonly string _exitCommand
 			= string.Join(Environment.NewLine, new string[] { "-stay_open", "0", $"-execute{Environment.NewLine}" });
-		private const int Timeout = 30000;    // in milliseconds
+		private const int Timeout = 30000;      // in milliseconds
 		private const int ExitTimeout = 15000;
 
 		private readonly Encoding _utf8NoBom = new UTF8Encoding(false);
@@ -92,11 +92,11 @@ namespace SharpExifTool
 		}
 
 		/*
-		public Task<int> ExecuteAsync(string args)
-		{
-			return Task.FromResult(Execute(args));
-		}
-		*/
+        public Task<int> ExecuteAsync(string args)
+        {
+            return Task.FromResult(Execute(args));
+        }
+        */
 
 		public Task<int> ExecuteAsync(params string[] args)
 		{
@@ -109,15 +109,15 @@ namespace SharpExifTool
 		}
 
 		/*
-		public int Execute(string args)
-		{
-			var argList = args
-				.Split(' ')
-				.Where(x => !string.IsNullOrWhiteSpace(x))
-				.Select(x => x.Trim());
-			return Execute(argList);
-		}
-		*/
+        public int Execute(string args)
+        {
+            var argList = args
+                .Split(' ')
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim());
+            return Execute(argList);
+        }
+        */
 
 		public int Execute(params string[] args)
 		{
@@ -179,7 +179,10 @@ namespace SharpExifTool
 						string value = line.Substring(eq + 1).Trim();
 
 						// Añadir al diccionario. Usamos TryAdd para evitar errores de clave duplicada si ExifTool devuelve tags repetidos.
-						result.TryAdd(key, value);
+						if (!result.TryAdd(key, value))
+						{
+							// Manejo de duplicados si es necesario, aunque TryAdd ya lo evita
+						}
 					}
 				}
 			}
@@ -225,7 +228,10 @@ namespace SharpExifTool
 						string value = line.Substring(eq + 1).Trim();
 
 						// Usamos TryAdd para manejar posibles duplicados
-						result.TryAdd(key, value);
+						if (!result.TryAdd(key, value))
+						{
+							// Manejo de duplicados si es necesario
+						}
 					}
 				}
 			}
@@ -234,7 +240,7 @@ namespace SharpExifTool
 			// incluso si no fueron devueltos por ExifTool
 			foreach (var key in keys)
 			{
-				// CAMBIO: Usamos ContainsKey que es O(1), en lugar de Any() que es O(N)
+				// CAMBIO: Usamos ContainsKey que es O(1)
 				if (!result.ContainsKey(key))
 					result.Add(key, string.Empty);
 			}
@@ -250,13 +256,34 @@ namespace SharpExifTool
 		{
 			return Task.FromResult(WriteTags(filename, properties, overwriteOriginal));
 		}
-		public int WriteTags(string filename, ICollection<KeyValuePair<string, string>> properties, bool overwriteOriginal = false)
+
+		public int WriteTags(string filename, ICollection<KeyValuePair<string, string>> properties, bool overwriteOriginal = false, bool isVerbose = false)
 		{
 			var commands = new List<string> { };
 
+			// Si quieres controlar el verbose, pásalo con isVerbose
+			if (isVerbose)
+			{
+				commands.Add("-v2");
+			}
+
 			foreach (var property in properties)
 			{
-				commands.Add($"-{property.Key}={property.Value}");
+				// 1. Aplanar el nombre del tag (Identity:Author:Name -> IdentityAuthorName)
+				// Esto es clave para escribir correctamente en estructuras definidas por el usuario.
+				string flattenedKey = FlattenTag(property.Key);
+
+				// 2. Verificar si el valor comienza con el signo de copia (<)
+				if (property.Value.StartsWith('<'))
+				{
+					// Comando de COPIA: -Tag<SourceTag
+					commands.Add($"-{flattenedKey}{property.Value}");
+				}
+				else
+				{
+					// Comando de ASIGNACIÓN DIRECTA: -Tag=Valor
+					commands.Add($"-{flattenedKey}={property.Value}");
+				}
 			}
 
 			if (overwriteOriginal)
@@ -264,10 +291,33 @@ namespace SharpExifTool
 
 			commands.Add(filename);
 
+			// 1. Ejecutar los comandos. Esto envía los argumentos y el -execute.
 			Execute(commands);
 
-			var line = _reader.ReadLine();
-			Debug.WriteLine(line);
+			// 2. Leer TODA la salida hasta el marcador {ready}
+			var output = new StringBuilder();
+			while (true)
+			{
+				var line = _reader.ReadLine();
+				if (line == null)
+				{
+					// Salida inesperada (ExifTool se cerró o se detuvo)
+					break;
+				}
+
+				// ExifTool en modo stay_open siempre termina con esta línea
+				if (line.StartsWith("{ready"))
+				{
+					break;
+				}
+
+				// Si no es el marcador de fin, lo agregamos al buffer
+				output.AppendLine(line);
+			}
+
+			// 3. Escribir el output completo para su revisión (en Debug o en Console)
+			Debug.WriteLine("--- ExifTool Write Output ---");
+			Debug.WriteLine(output.ToString());
 
 			return 0;
 		}
@@ -327,6 +377,39 @@ namespace SharpExifTool
 
 		#endregion
 
+		#region Utility Functions (NEW)
+
+		/// <summary>
+		/// Convierte nombres de tags estructurados (ej. XMP-AMC:Identity:Author:Name) a nombres aplanados (XMP-AMC:IdentityAuthorName) 
+		/// para su uso en la CLI de ExifTool. Los tags planos no se modifican.
+		/// </summary>
+		private static string FlattenTag(string structuredTag)
+		{
+			// Buscamos el primer ':' para separar el namespace/grupo (ej. XMP-AMC:) del resto de la estructura.
+			int colonIndex = structuredTag.IndexOf(':');
+
+			if (colonIndex > 0)
+			{
+				// El prefijo (namespace) debe mantenerse (ej. XMP-AMC:)
+				string nsPrefix = structuredTag.Substring(0, colonIndex + 1);
+
+				// La parte estructurada es el resto (ej. Identity:Author:Name)
+				string structurePart = structuredTag.Substring(colonIndex + 1);
+
+				// Si la parte estructurada contiene más ':' (es una estructura anidada), 
+				// reemplazamos esos ':' por nada para aplanarla.
+				if (structurePart.Contains(':'))
+				{
+					return nsPrefix + structurePart.Replace(":", "");
+				}
+			}
+
+			// Si no tiene el formato Namespace:Tag o no es estructurado, lo devolvemos tal cual.
+			return structuredTag;
+		}
+
+		#endregion
+
 		#region IDisposable Support
 
 		private void Dispose(bool disposing)
@@ -351,10 +434,10 @@ namespace SharpExifTool
 					Debug.Fail("Timed out waiting for exiftool to exit.");
 				}
 #if EXIF_TRACE
-					else
-					{
-						Debug.WriteLine("ExifTool exited cleanly.");
-					}
+                    else
+                    {
+                        Debug.WriteLine("ExifTool exited cleanly.");
+                    }
 #endif
 			}
 

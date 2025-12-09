@@ -6,62 +6,68 @@ Templates:
     ############################################################
 
     # --- Author (The person) ---
-    - Name: XMP:AMC:Identity:Author:ID
+    - Name: XMP-AMC:IdentityAuthorID
       Required: true
-      Source: 
+      Source:
         Type: Variable
-        ValueKey: AuthorID 
+        ValueKey: AuthorID
 
-    - Name: XMP:AMC:Identity:Author:Alias
+    - Name: XMP-AMC:IdentityAuthorAlias
       Required: true
-      Source: 
+      Source:
         Type: Variable
         ValueKey: AuthorAlias
 
-    - Name: XMP:AMC:Identity:Author:Name
+    - Name: XMP-AMC:IdentityAuthorName
       Required: true
-      Source: 
+      Source:
         Type: Variable
         ValueKey: AuthorName
 
     # --- Device (The hardware) ---
-    - Name: XMP:AMC:Identity:Device:ID
+    - Name: XMP-AMC:IdentityDeviceID
       Required: true
-      Source: 
+      Source:
         Type: Variable
         ValueKey: DeviceID
 
-    - Name: XMP:AMC:Identity:Device:Alias
+    - Name: XMP-AMC:IdentityDeviceAlias
       Required: true
-      Source: 
+      Source:
         Type: Variable
         ValueKey: DeviceAlias
 
-    - Name: XMP:AMC:Identity:Device:Name
+    - Name: XMP-AMC:IdentityDeviceName
       Required: true
-      Source: 
+      Source:
         Type: Variable
         ValueKey: DeviceName
+
+    - Name: XMP-AMC:IdentityDeviceSerialNumber
+      Required: false
+      Source:
+        Type: Variable
+        ValueKey: DeviceSerialNumber
         
     ############################################################
     # 2. ORIGIN (The immutable "backup" of the original state)
     ############################################################
     
-    - Name: XMP:AMC:Origin:OriginalFileName
+    - Name: XMP-AMC:OriginOriginalFileName
       Required: true
-      Source: 
+      Source:
         Type: Variable
-        ValueKey: OriginalFileName 
+        ValueKey: OriginalFileName
 
-    - Name: XMP:AMC:Origin:OriginalDateTime
+    - Name: XMP-AMC:OriginOriginalDateTime
       Required: true
-      Source: 
+      Source:
         Type: Variable
-        ValueKey: OriginalDateTime 
+        ValueKey: OriginalDateTime
 
-    - Name: XMP:AMC:Origin:OriginalSubseconds
-      Required: false
-      Source: 
+    - Name: XMP-AMC:OriginOriginalSubseconds
+      Required: true
+      Source:
         Type: Variable
         ValueKey: OriginalSubseconds
         
@@ -69,32 +75,18 @@ Templates:
     # 5. STANDARD TAGS SYNC (Industry Compatibility)
     ############################################################
     
-    # --- Standard Author (Source: MyAuthorName Composite Tag) ---
-    - Name: Creator
+    # --- Standard Author ---
+    - Name: XMP-dc:Creator
       Required: true
       Source: 
-        Type: ExifToolTag
-        ValueKey: XMP:AMC:Identity:Author:Name 
-
-    # --- Standard Original Filename (Source: FileName system tag) ---
-    - Name: IPTC:PreservedFileName 
-      Required: true
-      Source: 
-        Type: ExifToolTag
-        ValueKey: XMP:AMC:Origin:OriginalFileName 
-
-    - Name: XMP:OriginalFileName  
-      Required: true
-      Source: 
-        Type: ExifToolTag
-        ValueKey: XMP:AMC:Origin:OriginalFileName 
+        Type: Variable
+        ValueKey: AuthorName
 
     - Name: XMP-xmpMM:PreservedFileName
       Required: true
       Source: 
-        Type: ExifToolTag
-        ValueKey: XMP:AMC:Origin:OriginalFileName
-
+        Type: Variable
+        ValueKey: OriginalFileName
 
   AMC-WOF-Ingest:
     
@@ -103,38 +95,38 @@ Templates:
     ############################################################
 
     # --- Author (The person) ---
-    - Name: XMP:AMC:Identity:Author:ID
+    - Name: XMP-AMC:IdentityAuthorID
       Required: true
       Source: 
         Type: Variable
         ValueKey: AuthorID 
 
-    - Name: XMP:AMC:Identity:Author:Alias
+    - Name: XMP-AMC:IdentityAuthorAlias
       Required: true
       Source: 
         Type: Variable
         ValueKey: AuthorAlias
 
-    - Name: XMP:AMC:Identity:Author:Name
+    - Name: XMP-AMC:IdentityAuthorName
       Required: true
       Source: 
         Type: Variable
         ValueKey: AuthorName
 
     # --- Device (The hardware) ---
-    - Name: XMP:AMC:Identity:Device:ID
+    - Name: XMP-AMC:IdentityDeviceID
       Required: true
       Source: 
         Type: Variable
         ValueKey: DeviceID
 
-    - Name: XMP:AMC:Identity:Device:Alias
+    - Name: XMP-AMC:IdentityDeviceAlias
       Required: true
       Source: 
         Type: Variable
         ValueKey: DeviceAlias
 
-    - Name: XMP:AMC:Identity:Device:Name
+    - Name: XMP-AMC:IdentityDeviceName
       Required: true
       Source: 
         Type: Variable
@@ -144,19 +136,19 @@ Templates:
     # 2. ORIGIN (The immutable "backup" of the original state)
     ############################################################
     
-    - Name: XMP:AMC:Origin:OriginalFileName
+    - Name: XMP-AMC:OriginOriginalFileName
       Required: true
       Source: 
         Type: Variable
         ValueKey: OriginalFileName 
 
-    - Name: XMP:AMC:Origin:OriginalDateTime
+    - Name: XMP-AMC:OriginOriginalDateTime
       Required: true
       Source: 
         Type: Variable
         ValueKey: OriginalDateTime 
 
-    - Name: XMP:AMC:Origin:OriginalSubseconds
+    - Name: XMP-AMC:OriginOriginalSubseconds
       Required: false
       Source: 
         Type: Variable
@@ -166,13 +158,13 @@ Templates:
     # 3. WORKFLOW (What processing has been applied)
     ############################################################
 
-    - Name: XMP:AMC:Workflow:Ingest:DerivedFileName
+    - Name: XMP-AMC:WorkflowIngestDerivedFileName
       Required: false
       Source: 
         Type: Variable
         ValueKey: DerivedFileName
 
-    - Name: XMP:AMC:Workflow:Ingest:DerivedFolderPath
+    - Name: XMP-AMC:WorkflowIngestDerivedFolderPath
       Required: false
       Source: 
         Type: Variable
@@ -181,7 +173,7 @@ Templates:
     ############################################################
     # 4. EVENT (What the content is about)
     ############################################################
-    - Name: XMP:AMC:Event:Name
+    - Name: XMP-AMC:EventName
       Required: false
       Source: 
         Type: Variable
@@ -191,37 +183,15 @@ Templates:
     # 5. STANDARD TAGS SYNC (Industry Compatibility)
     ############################################################
     
-    # --- Standard Author (Source: MyAuthorName Composite Tag) ---
-    - Name: Creator
+    # --- Standard Author ---
+    - Name: XMP-dc:Creator
       Required: true
       Source: 
-        Type: ExifToolTag
-        ValueKey: XMP:AMC:Identity:Author:Name 
-
-    # --- Standard Original Filename (Source: FileName system tag) ---
-    - Name: IPTC:PreservedFileName 
-      Required: true
-      Source: 
-        Type: ExifToolTag
-        ValueKey: XMP:AMC:Origin:OriginalFileName 
-
-    - Name: XMP:OriginalFileName  
-      Required: true
-      Source: 
-        Type: ExifToolTag
-        ValueKey: XMP:AMC:Origin:OriginalFileName 
+        Type: Variable
+        ValueKey: AuthorName
 
     - Name: XMP-xmpMM:PreservedFileName
       Required: true
       Source: 
-        Type: ExifToolTag
-        ValueKey: XMP:AMC:Origin:OriginalFileName
-  
-      
-  AMC-Advanced-Metadata:
-    - Name: XMP:DC:Rights
-      Required: true # Requerido para un template avanzado
-    - Name: XMP:DC:Subject
-      Required: false # Opcional, pero se fomenta su uso
-    - Name: XMP:Iptc4xmpExt:PersonInImage
-      Required: false
+        Type: Variable
+        ValueKey: OriginalFileName
