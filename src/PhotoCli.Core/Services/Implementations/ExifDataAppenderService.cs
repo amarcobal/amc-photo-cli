@@ -1,21 +1,25 @@
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Services.Contracts;
+using PhotoCli.Core.Services.Contracts.SpectreConsole; // Asegúrate de que esta referencia es correcta
 using System.Collections.Generic;
+using System.IO;
 
 namespace PhotoCli.Core.Services.Implementations;
 
 public class ExifDataAppenderService : IExifDataAppenderService
 {
-	private const string ProgressName = "Parsing photo exif information";
-	private readonly IConsoleWriter _consoleWriter;
+	private const string TaskName = "Parsing photo exif information";
+
+	// Reemplazamos IConsoleWriter por IProgressService para el manejo de progreso interactivo
+	private readonly IProgressService _progressService;
 	private readonly IExifParserService _exifParserService;
 	private readonly Statistics _statistics;
 
-	public ExifDataAppenderService(IExifParserService exifParserService, Statistics statistics, IConsoleWriter consoleWriter)
+	public ExifDataAppenderService(IExifParserService exifParserService, Statistics statistics, IProgressService progressService)
 	{
 		_exifParserService = exifParserService;
 		_statistics = statistics;
-		_consoleWriter = consoleWriter;
+		_progressService = progressService; // Inyectamos el nuevo servicio
 	}
 
 	public IReadOnlyCollection<Photo> ExtractExifData(
@@ -25,42 +29,51 @@ public class ExifDataAppenderService : IExifDataAppenderService
 		out bool allPhotosHasCoordinate,
 		bool isSilent = false)
 	{
-		if (!isSilent)
+		// Si es silencioso, ejecutamos la lógica sin la barra de progreso.
+		if (isSilent)
 		{
-			_consoleWriter.ProgressStart(ProgressName, _statistics.PhotosFound);
+			return ExtractExifDataInternal(photos, out allPhotosAreValid, out allPhotosHasPhotoTaken, out allPhotosHasCoordinate, out _, out _, out _);
 		}
 
-		var photosAreValid = true;
-		var photosHasPhotoTaken = true;
-		var photosHasCoordinate = true;
-
-		foreach (var photo in photos)
+		// Si NO es silencioso, usamos IProgressService.
+		var results = _progressService.ExecuteProgress("EXIF Data Extraction (Basic)", ctx =>
 		{
-			var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, true, true, true, true, true);
-			if (exifData == null)
-				photosAreValid = false;
-			if (photosHasPhotoTaken && exifData?.TakenDate == null)
-				photosHasPhotoTaken = false;
-			if (photosHasCoordinate && exifData?.Coordinate == null)
-				photosHasCoordinate = false;
-			if (exifData != null)
-				photo.SetExifData(exifData);
+			// Creamos una única tarea para todo el proceso.
+			var task = ctx.AddTask($"[yellow]{TaskName}[/]", photos.Count);
 
-			if (!isSilent)
+			var photosAreValid = true;
+			var photosHasPhotoTaken = true;
+			var photosHasCoordinate = true;
+
+			foreach (var photo in photos)
 			{
-				_consoleWriter.InProgressItemComplete(ProgressName);
+				task.UpdateDescription($"[yellow]{TaskName}:[/] [dim]{Path.GetFileName(photo.PhotoFile.SourceFullPath)}[/]");
+
+				var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, true, true, true, true, true);
+
+				if (exifData == null)
+					photosAreValid = false;
+				if (photosHasPhotoTaken && exifData?.TakenDate == null)
+					photosHasPhotoTaken = false;
+				if (photosHasCoordinate && exifData?.Coordinate == null)
+					photosHasCoordinate = false;
+				if (exifData != null)
+					photo.SetExifData(exifData);
+
+				task.Increment(1);
 			}
-		}
 
-		if (!isSilent)
-		{
-			_consoleWriter.ProgressFinish(ProgressName);
-		}
+			// Limpiar la descripción al finalizar
+			task.UpdateDescription($"[green]✔ {TaskName}:[/] Completed parsing {photos.Count} photo(s).");
+			task.Stop();
 
-		allPhotosAreValid = photosAreValid;
-		allPhotosHasPhotoTaken = photosHasPhotoTaken;
-		allPhotosHasCoordinate = photosHasCoordinate;
-		return photos;
+			return (photos, photosAreValid, photosHasPhotoTaken, photosHasCoordinate);
+		});
+
+		allPhotosAreValid = results.photosAreValid;
+		allPhotosHasPhotoTaken = results.photosHasPhotoTaken;
+		allPhotosHasCoordinate = results.photosHasCoordinate;
+		return results.photos;
 	}
 
 	public IReadOnlyCollection<Photo> ExtractExifData(
@@ -73,21 +86,90 @@ public class ExifDataAppenderService : IExifDataAppenderService
 		out bool allPhotosHasOriginalFileName,
 		bool isSilent = false)
 	{
-		if (!isSilent)
+		// Si es silencioso, ejecutamos la lógica sin la barra de progreso.
+		if (isSilent)
 		{
-			_consoleWriter.ProgressStart(ProgressName, _statistics.PhotosFound);
+			return ExtractExifDataInternal(photos, out allPhotosAreValid, out allPhotosHasPhotoTaken, out allPhotosHasCoordinate, out allPhotosHasMakeModel, out allPhotosHasSubseconds, out allPhotosHasOriginalFileName);
 		}
 
-		var photosAreValid = true;
-		var photosHasPhotoTaken = true;
-		var photosHasCoordinate = true;
-		var photosHasMakeModel = true;
-		var photosHasSubSeconds = true;
-		var photosHasOriginalFileName = true;
+		// Si NO es silencioso, usamos IProgressService.
+		var results = _progressService.ExecuteProgress("EXIF Data Extraction (Extended)", ctx =>
+		{
+			// Creamos una única tarea para todo el proceso.
+			var task = ctx.AddTask($"[yellow]{TaskName}[/]", photos.Count);
 
+			var photosAreValid = true;
+			var photosHasPhotoTaken = true;
+			var photosHasCoordinate = true;
+			var photosHasMakeModel = true;
+			var photosHasSubSeconds = true;
+			var photosHasOriginalFileName = true;
+
+			foreach (var photo in photos)
+			{
+				task.UpdateDescription($"[yellow]{TaskName}:[/] [dim]{Path.GetFileName(photo.PhotoFile.SourceFullPath)}[/]");
+
+				var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, true, true, true, true, true);
+
+				if (exifData == null)
+					photosAreValid = false;
+				if (photosHasPhotoTaken && exifData?.TakenDate == null)
+					photosHasPhotoTaken = false;
+				if (photosHasCoordinate && exifData?.Coordinate == null)
+					photosHasCoordinate = false;
+				if (photosHasMakeModel && (exifData?.Make == null || exifData?.Model == null))
+					photosHasMakeModel = false;
+				if (photosHasSubSeconds && exifData?.SubSeconds == null)
+					photosHasSubSeconds = false;
+				if (photosHasOriginalFileName && string.IsNullOrWhiteSpace(exifData?.OriginalFileName))
+					photosHasOriginalFileName = false;
+				if (exifData != null)
+					photo.SetExifData(exifData);
+
+				task.Increment(1);
+			}
+
+			// Limpiar la descripción al finalizar
+			task.UpdateDescription($"[green]✔ {TaskName}:[/] Completed parsing {photos.Count} photo(s).");
+			task.Stop();
+
+			return (photos, photosAreValid, photosHasPhotoTaken, photosHasCoordinate, photosHasMakeModel, photosHasSubSeconds, photosHasOriginalFileName);
+		});
+
+		allPhotosAreValid = results.photosAreValid;
+		allPhotosHasPhotoTaken = results.photosHasPhotoTaken;
+		allPhotosHasCoordinate = results.photosHasCoordinate;
+		allPhotosHasMakeModel = results.photosHasMakeModel;
+		allPhotosHasSubseconds = results.photosHasSubSeconds;
+		allPhotosHasOriginalFileName = results.photosHasOriginalFileName;
+		return results.photos;
+	}
+
+	/// <summary>
+	/// Lógica de extracción interna unificada para evitar duplicación.
+	/// </summary>
+	private IReadOnlyCollection<Photo> ExtractExifDataInternal(
+		IReadOnlyCollection<Photo> photos,
+		out bool photosAreValid,
+		out bool photosHasPhotoTaken,
+		out bool photosHasCoordinate,
+		out bool photosHasMakeModel,
+		out bool photosHasSubSeconds,
+		out bool photosHasOriginalFileName)
+	{
+		photosAreValid = true;
+		photosHasPhotoTaken = true;
+		photosHasCoordinate = true;
+		photosHasMakeModel = true;
+		photosHasSubSeconds = true;
+		photosHasOriginalFileName = true;
+
+		// El segundo método de sobrecarga (el extenso) siempre llama al parser completo,
+		// por lo que este método interno solo necesita verificar todas las banderas.
 		foreach (var photo in photos)
 		{
 			var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, true, true, true, true, true);
+
 			if (exifData == null)
 				photosAreValid = false;
 			if (photosHasPhotoTaken && exifData?.TakenDate == null)
@@ -102,24 +184,7 @@ public class ExifDataAppenderService : IExifDataAppenderService
 				photosHasOriginalFileName = false;
 			if (exifData != null)
 				photo.SetExifData(exifData);
-
-			if (!isSilent)
-			{
-				_consoleWriter.InProgressItemComplete(ProgressName);
-			}
 		}
-
-		if (!isSilent)
-		{
-			_consoleWriter.ProgressFinish(ProgressName);
-		}
-
-		allPhotosAreValid = photosAreValid;
-		allPhotosHasPhotoTaken = photosHasPhotoTaken;
-		allPhotosHasCoordinate = photosHasCoordinate;
-		allPhotosHasMakeModel = photosHasMakeModel;
-		allPhotosHasSubseconds = photosHasSubSeconds;
-		allPhotosHasOriginalFileName = photosHasOriginalFileName;
 		return photos;
 	}
 }

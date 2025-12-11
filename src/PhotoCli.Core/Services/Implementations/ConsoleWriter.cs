@@ -309,5 +309,10 @@ public class ConsoleWriter : IConsoleWriter
 		return Environment.UserInteractive && !Environment.CurrentDirectory.Contains("tests", StringComparison.OrdinalIgnoreCase);
 	}
 
+	public bool IsInteractive() // <-- NUEVO MÉTODO IMPLEMENTADO
+	{
+		return UserInteractive();
+	}
+
 	#endregion
 }

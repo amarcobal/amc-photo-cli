@@ -36,4 +36,9 @@ public interface IConsoleWriter
 	/// Limpia el mensaje de estado interactivo y avanza a la siguiente línea, asegurando que el log anterior permanezca.
 	/// </summary>
 	void ClearStatusLine();
+
+	/// <summary>
+	/// Indica si el entorno de consola es interactivo (permite el movimiento del cursor).
+	/// </summary>
+	bool IsInteractive(); // <-- NUEVO MÉTODO
 }

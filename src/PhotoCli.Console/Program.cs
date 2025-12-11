@@ -28,6 +28,8 @@ using PhotoCli.Core.Models.ReverseGeocode.BigDataCloud;
 using PhotoCli.Core.Models.ReverseGeocode.GoogleMaps;
 using PhotoCli.Core.Models.ReverseGeocode.OpenStreetMap;
 using Spectre.Console;
+using PhotoCli.Core.Services.Implementations.SpectreConsole;
+using PhotoCli.Core.Services.Contracts.SpectreConsole;
 
 namespace PhotoCli.Console;
 
@@ -310,6 +312,7 @@ public static class Program
 			services.AddTransient<IMetadataService, MetadataService>();
 			services.AddTransient<IMetadataConfigurationService, MetadataConfigurationService>();
 			services.AddTransient<IValidator<ToolOptions>, ToolOptionsValidator>();
+			services.AddTransient<IProgressService, SpectreConsoleProgressService>();
 
 			if (typeof(TConsoleRunner) == typeof(ArchiveRunner))
 			{
