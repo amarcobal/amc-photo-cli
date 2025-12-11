@@ -57,6 +57,10 @@
       "commandName": "Project",
       "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox-test-add\" --allow-unknown-identity"
     },
+    "Metadata - PC - 3.3 Add (Template) - REAL - Allow Unknown Identity - Overwrite Tags": {
+      "commandName": "Project",
+      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox-test-add\" --allow-unknown-identity --overwrite-tags"
+    },
     "Metadata - PC - 4. Delete (Template) - DryRun": {
       "commandName": "Project",
       "commandLineArgs": "metadata --operation delete --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -d"

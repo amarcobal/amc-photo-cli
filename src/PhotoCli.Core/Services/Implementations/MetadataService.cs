@@ -10,6 +10,10 @@ using PhotoCli.Core.Models.Enums;
 using System.Collections.Generic;
 using System;
 using PhotoCli.Core.Models.SpectreConsole;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
+using System.Threading;
+using System.Diagnostics;
 
 namespace PhotoCli.Core.Services.Implementations;
 
@@ -27,6 +31,7 @@ public class MetadataService : IMetadataService
 {
 	private readonly IFileSystem _fileSystem;
 	private readonly IExifParserService _exifParserService;
+	private readonly IExifDataAppenderService _exifDataAppenderService;
 	private readonly ILogger<MetadataService> _logger;
 	private readonly ToolOptions _options;
 	private readonly Statistics _statistics;
@@ -64,7 +69,8 @@ public class MetadataService : IMetadataService
 		ILogger<MetadataService> logger,
 		ToolOptions options,
 		Statistics statistics,
-		IConsoleWriter consoleWriter)
+		IConsoleWriter consoleWriter,
+		IExifDataAppenderService exifDataAppenderService)
 	{
 		_fileSystem = fileSystem;
 		_exifParserService = exifParserService;
@@ -72,6 +78,7 @@ public class MetadataService : IMetadataService
 		_options = options;
 		_statistics = statistics;
 		_consoleWriter = consoleWriter;
+		_exifDataAppenderService = exifDataAppenderService;
 
 		_templateTagMap = configService.GetTemplateMap();
 	}
@@ -84,10 +91,11 @@ public class MetadataService : IMetadataService
 		{
 			new(metadataKey, metadataValue)
 		};
+		// NOTA: WriteMetadataBatch no ha sido modificado para usar el Parallel.ForEach ni el Status Console.
 		return WriteMetadataBatch(photos, tagsToWrite, $"Key/Value {metadataKey}", isDryRun);
 	}
 
-	public IReadOnlyCollection<Photo> AddMetadataFromTemplate(
+	public IReadOnlyDictionary<string, FileValidationResult> AddMetadataFromTemplate(
 	IReadOnlyCollection<Photo> photos,
 	string templateName,
 	bool isDryRun,
@@ -95,199 +103,269 @@ public class MetadataService : IMetadataService
 	bool allowUnknownIdentity)
 	{
 		var templateTags = GetTemplateTags(templateName);
-		var photosToProcess = new List<Photo>();
 
-		// Usamos esta lista tanto para Dry Run como para el log de ejecución real
-		var finalRunResults = new List<AddPreviewResult>();
-		var identityDetails = new Dictionary<string, string>();
+		var finalValidationResults = new ConcurrentDictionary<string, FileValidationResult>(StringComparer.OrdinalIgnoreCase);
+		var finalRunLogResults = new ConcurrentBag<AddPreviewResult>();
+		var identityDetails = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+		// Contadores thread-safe
 		int readyToProcessCount = 0;
 		int skippedIdentityCount = 0;
-		int skippedTemplateErrorCount = 0;
-
+		int failedByTemplateValidation = 0; // REFACTORIZADO
+		int failedByWriteError = 0;         // NUEVO
+		int processedCount = 0; // Para el Status Console
+		int totalFiles = photos.Count;
+		Stopwatch sw = Stopwatch.StartNew();
 
 		if (!templateTags.Any())
 		{
 			_logger.LogWarning("Template '{Template}' no tiene tags definidos.", templateName);
-			return photos;
+			return new Dictionary<string, FileValidationResult>();
 		}
 
-		foreach (var photo in photos)
+		// -------------------------------------------------------------------------
+		// !!! INICIO DEL PROCESAMIENTO PARALELO !!!
+		// -------------------------------------------------------------------------
+		Parallel.ForEach(photos, (photo) =>
 		{
 			var fullPath = photo.PhotoFile.SourceFullPath;
 
-			// 1. Validar Identidad (Generando TagValidationResults)
-			var identityCheckResults = new Dictionary<string, TagValidationResult>(StringComparer.OrdinalIgnoreCase);
-			var (identityPassed, identityLog) = ValidateIdentityAndGenerateTags(photo, allowUnknownIdentity, identityCheckResults);
+			// --- STATUS CONSOLE UPDATE (Thread-Safe) ---
+			int currentProcessed = Interlocked.Increment(ref processedCount);
+			UpdateConsoleStatus(currentProcessed, totalFiles, sw.Elapsed, photo.PhotoFile.FileName);
+			// ------------------------------------------
 
+			// Inicializar variables de estado y resultados locales
+			bool templateError = false;
+			bool templatePassed = false;
+			bool writeSuccess = true;
+
+			var identityCheckResults = new Dictionary<string, TagValidationResult>(StringComparer.OrdinalIgnoreCase);
+			var templateCheckResults = new Dictionary<string, TagValidationResult>(StringComparer.OrdinalIgnoreCase);
+			var tagsToWriteForPhoto = new List<KeyValuePair<string, string>>();
+			var tagExecutionDetails = new Dictionary<string, (string Value, string StatusColor, string DisplayText)>(); // <-- Log de ejecución/preview
+			var overwriteDiffs = new Dictionary<string, (string OriginalValue, string NewValue, bool Changed)>();
+
+
+			// 1. Validar Identidad (Generando TagValidationResults)
+			var (identityPassed, identityLog) = ValidateIdentityAndGenerateTags(photo, allowUnknownIdentity, identityCheckResults);
 			identityDetails[fullPath] = identityLog;
 
-			// Inicializar estructuras de resultado para esta foto
-			var tagsToWriteForPhoto = new List<KeyValuePair<string, string>>();
-			var dryRunFileTags = new Dictionary<string, (string Value, string StatusColor, string DisplayText)>();
-			var overwriteDiffs = new Dictionary<string, (string OriginalValue, string NewValue, bool Changed)>();
-			var templateCheckResults = new Dictionary<string, TagValidationResult>(StringComparer.OrdinalIgnoreCase);
-			bool templateError = false;
+			Photo currentPhoto = photo; // Usaremos esta variable, que podría ser actualizada
 
-			if (!identityPassed)
+			if (identityPassed)
 			{
-				skippedIdentityCount++;
-				var validationResult = new FileValidationResult { IdentityTags = identityCheckResults, TemplateTags = templateCheckResults };
-				finalRunResults.Add(new AddPreviewResult(fullPath, false, false, dryRunFileTags, overwriteDiffs, validationResult));
-
-				if (!isDryRun) _statistics.InternalError++;
-				continue;
-			}
-
-			// 2. Resolver Tags y aplicar lógica de Overwrite
-			foreach (var tag in templateTags)
-			{
-				string? resolvedValue = ResolveTagValue(photo, tag, isDryRun, templateTags);
-
-				// Manejo de error de configuración
-				if (resolvedValue == "CONFIG_ERROR")
+				// 2. Resolver Tags y aplicar lógica de Overwrite
+				foreach (var tag in templateTags)
 				{
-					templateError = true;
-					if (isDryRun) dryRunFileTags[tag.Name] = ("Config Error", "red", "[bold white on red]CONFIG ERROR[/]");
-					templateCheckResults[tag.Name] = new TagValidationResult(false, "CONFIG_ERROR", tag.Required, false);
-					continue;
-				}
+					// Nota: Usamos isDryRun=true en ResolveTagValue para obtener la simulación del valor literal,
+					// incluso si estamos en modo Real, a menos que el tag sea de tipo ExifToolTag.
+					string? resolvedValue = ResolveTagValue(currentPhoto, tag, isDryRun, templateTags);
 
-				// Validación del valor resuelto
-				if (string.IsNullOrWhiteSpace(resolvedValue) || resolvedValue == new SubSeconds("0").Padded())
-				{
-					if (tag.Required)
+					// Manejo de error de configuración
+					if (resolvedValue == "CONFIG_ERROR")
 					{
 						templateError = true;
-						if (isDryRun) dryRunFileTags[tag.Name] = ("MISSING", "red", "[bold white on red]MISSING[/]");
-						templateCheckResults[tag.Name] = new TagValidationResult(false, string.Empty, tag.Required, false);
+
+						// Capturamos el error de configuración para la tabla de log
+						tagExecutionDetails[tag.Name] = ("Config Error", "red", "[bold white on red]CONFIG ERROR (Missing Prop Map)[/]");
+
+						templateCheckResults[tag.Name] = new TagValidationResult(false, "CONFIG_ERROR", tag.Required, false);
+						continue;
 					}
-					else if (isDryRun)
+
+					// Validación del valor resuelto (Missing)
+					if (string.IsNullOrWhiteSpace(resolvedValue) || resolvedValue == new SubSeconds("0").Padded())
 					{
-						dryRunFileTags[tag.Name] = ("(Empty)", "dim", "[dim](Empty)[/]");
-						templateCheckResults[tag.Name] = new TagValidationResult(false, string.Empty, tag.Required, true);
-					}
-					continue;
-				}
-
-				// Valor resuelto (pasa)
-				if (isDryRun)
-					templateCheckResults[tag.Name] = new TagValidationResult(true, resolvedValue, tag.Required, true);
-
-
-				// Lógica de Overwrite
-				string? existingVal = photo.ExifData?.Metadata.TryGetValue(tag.Name, out var val) == true ? val : null;
-				bool tagExistsInFile = existingVal != null;
-				bool shouldWrite = !tagExistsInFile || overwriteTags;
-
-				if (shouldWrite)
-				{
-					tagsToWriteForPhoto.Add(new KeyValuePair<string, string>(tag.Name, resolvedValue));
-
-					if (isDryRun)
-					{
-						string statusColor;
-						string displayText;
-
-						if (tagExistsInFile && overwriteTags)
+						if (tag.Required)
 						{
-							// CASO OVERWRITE: Calcular la diferencia
-							bool changed = !existingVal!.Equals(resolvedValue, StringComparison.OrdinalIgnoreCase);
-							overwriteDiffs[tag.Name] = (existingVal.EscapeMarkup(), resolvedValue.EscapeMarkup(), changed);
+							templateError = true;
+							if (isDryRun) tagExecutionDetails[tag.Name] = ("MISSING", "red", "[bold white on red]MISSING[/]");
+							templateCheckResults[tag.Name] = new TagValidationResult(false, string.Empty, tag.Required, false);
+						}
+						else if (isDryRun)
+						{
+							tagExecutionDetails[tag.Name] = ("(Empty)", "dim", "[dim](Empty)[/]");
+							templateCheckResults[tag.Name] = new TagValidationResult(false, string.Empty, tag.Required, true);
+						}
+						continue;
+					}
 
-							if (changed)
+					// Valor resuelto (pasa)
+					if (isDryRun)
+						templateCheckResults[tag.Name] = new TagValidationResult(true, resolvedValue, tag.Required, true);
+
+
+					// Lógica de Overwrite
+					string? existingVal = currentPhoto.ExifData?.Metadata.TryGetValue(tag.Name, out var val) == true ? val : null;
+					bool tagExistsInFile = existingVal != null;
+					bool shouldWrite = !tagExistsInFile || overwriteTags;
+
+					if (shouldWrite)
+					{
+						tagsToWriteForPhoto.Add(new KeyValuePair<string, string>(tag.Name, resolvedValue));
+
+						if (isDryRun)
+						{
+							string statusColor;
+							string displayText;
+
+							if (tagExistsInFile && overwriteTags)
 							{
-								// Cambio de valor (Amarillo)
-								displayText = $"[bold]{existingVal.EscapeMarkup()}[/] → [yellow]{resolvedValue.EscapeMarkup()}[/]";
-								statusColor = "yellow";
+								// CASO OVERWRITE: Calcular la diferencia
+								bool changed = !existingVal!.Equals(resolvedValue, StringComparison.OrdinalIgnoreCase);
+								overwriteDiffs[tag.Name] = (existingVal.EscapeMarkup(), resolvedValue.EscapeMarkup(), changed);
+
+								if (changed)
+								{
+									// Cambio de valor (Amarillo)
+									displayText = $"[bold]{existingVal.EscapeMarkup()}[/] → [yellow]{resolvedValue.EscapeMarkup()}[/]";
+									statusColor = "yellow";
+								}
+								else
+								{
+									// Mismo valor (Dim)
+									displayText = $"[dim]{resolvedValue.EscapeMarkup()}[/] (No Change)";
+									statusColor = "dim";
+								}
 							}
 							else
 							{
-								// Mismo valor (Dim)
-								displayText = $"[dim]{resolvedValue.EscapeMarkup()}[/] (No Change)";
-								statusColor = "dim";
+								// CASO NUEVO TAG (Cyan)
+								displayText = $"[cyan]{resolvedValue.EscapeMarkup()}[/] (New)";
+								statusColor = "cyan";
 							}
+
+							tagExecutionDetails[tag.Name] = (resolvedValue, statusColor, displayText);
 						}
 						else
 						{
-							// CASO NUEVO TAG (Cyan)
-							displayText = $"[cyan]{resolvedValue.EscapeMarkup()}[/] (New)";
-							statusColor = "cyan";
+							// MODO REAL: Placeholder (se sobrescribirá si la escritura es exitosa)
+							tagExecutionDetails[tag.Name] = (resolvedValue!, "dim", "[dim]Writing...[/]");
 						}
+					}
+					else
+					{
+						// El tag existe y NO estamos sobrescribiendo (Kept)
 
-						dryRunFileTags[tag.Name] = (resolvedValue, statusColor, displayText);
+						if (isDryRun)
+						{
+							string displayText = $"[dim]{existingVal!.EscapeMarkup()}[/] (Kept)";
+							tagExecutionDetails[tag.Name] = (existingVal, "dim", displayText);
+						}
+						else
+						{
+							// MODO REAL: Mantenido. Se muestra inmediatamente
+							tagExecutionDetails[tag.Name] = (existingVal!, "dim", $"[dim]{existingVal!.EscapeMarkup()}[/] (Kept)");
+						}
+					}
+				} // Fin foreach tag
+
+				templatePassed = !templateError;
+
+				if (templatePassed)
+				{
+					// 3. Ejecución Real y Refresco
+					// writeSuccess ya está inicializada en true
+
+					// Contar los archivos listos para procesar, incluso en Dry Run.
+					Interlocked.Increment(ref readyToProcessCount);
+
+					if (!isDryRun && tagsToWriteForPhoto.Any())
+					{
+						// Escribir metadatos Y Refrescar la instancia currentPhoto
+						(writeSuccess, var tempUpdatedPhoto) = WriteMetadataForPhoto(photo, tagsToWriteForPhoto, $"Template {templateName}");
+
+						if (writeSuccess && tempUpdatedPhoto != null)
+						{
+							currentPhoto = tempUpdatedPhoto;
+
+							// Revalidar los tags del template con los datos frescos para el log final
+							(templatePassed, templateCheckResults) = RevalidateTemplateTags(currentPhoto, templateTags);
+
+							// ¡ACTUALIZAR tagExecutionDetails con los valores leídos del archivo!
+							RecalculateTagDetailsForSuccessfulWrite(currentPhoto, templateTags, tagExecutionDetails);
+
+						}
+						else
+						{
+							writeSuccess = false; // Fallo de escritura/refresco
+						}
+					}
+
+					if (!writeSuccess && !isDryRun)
+					{
+						// Fallo de ESCRITURA REAL (I/O)
+						templatePassed = false;
+						Interlocked.Increment(ref failedByWriteError); // USAMOS EL NUEVO CONTADOR
+						_statistics.InternalError++;
+						Interlocked.Decrement(ref readyToProcessCount); // No se procesó con éxito
 					}
 				}
 				else
 				{
-					// El tag existe y NO estamos sobrescribiendo (overwriteTags=false)
-					if (isDryRun)
-					{
-						string displayText = $"[dim]{existingVal!.EscapeMarkup()}[/] (Kept)";
-						dryRunFileTags[tag.Name] = (existingVal, "dim", displayText);
-					}
+					// Fallo de validación del template (MISSING, CONFIG_ERROR, etc.)
+					Interlocked.Increment(ref failedByTemplateValidation); // USAMOS EL NUEVO CONTADOR
+					if (!isDryRun) _statistics.InternalError++;
 				}
-			} // Fin foreach tag
-
-			bool templatePassed = !templateError;
-
-			if (templateError) skippedTemplateErrorCount++;
-
-			// 3. Almacenar resultados Dry Run / 4. Ejecución Real
-
-			if (identityPassed && templatePassed)
+			} // Fin if (identityPassed)
+			else
 			{
-				readyToProcessCount++;
-
-				bool writeSuccess = true;
-
-				if (!isDryRun && tagsToWriteForPhoto.Any())
-				{
-					// EJECUCIÓN REAL: Escribir metadatos
-					writeSuccess = WriteMetadataForPhoto(photo, tagsToWriteForPhoto, $"Template {templateName}");
-				}
-
-				if (!writeSuccess)
-				{
-					// Si la escritura falló, marcamos el template como fallido para el log final
-					templatePassed = false;
-					// Esto ya se cuenta en WriteMetadataForPhoto, pero se asegura el skippedTemplateErrorCount
-					skippedTemplateErrorCount++;
-				}
-
-				// *** Generar el resultado para la tabla/log ***
-				var validationResult = new FileValidationResult
-				{
-					IdentityTags = identityCheckResults,
-					TemplateTags = templateCheckResults
-				};
-
-				finalRunResults.Add(new AddPreviewResult(
-					fullPath,
-					identityPassed,
-					templatePassed, // templatePassed ahora refleja el fallo real de escritura
-					dryRunFileTags,
-					overwriteDiffs,
-					validationResult
-				));
-
-				if (writeSuccess && !isDryRun) photosToProcess.Add(photo);
-
+				// Fallo de identidad
+				Interlocked.Increment(ref skippedIdentityCount);
+				if (!isDryRun) _statistics.InternalError++;
 			}
-			else if (!isDryRun)
+
+			// 4. Almacenar resultados para la tabla y el retorno (Final Validation)
+			var finalTemplateCheck = templateCheckResults;
+
+			if (!identityPassed)
 			{
-				_statistics.InternalError++;
-				// Si falla en la validación antes de intentar escribir, se registra aquí
-				var validationResult = new FileValidationResult { IdentityTags = identityCheckResults, TemplateTags = templateCheckResults };
-				finalRunResults.Add(new AddPreviewResult(fullPath, identityPassed, templatePassed, dryRunFileTags, overwriteDiffs, validationResult));
+				templatePassed = false;
+				finalTemplateCheck = new Dictionary<string, TagValidationResult>();
 			}
-		} // Fin foreach photo
+
+			var validationResult = new FileValidationResult
+			{
+				IdentityTags = identityCheckResults,
+				TemplateTags = finalTemplateCheck
+			};
+
+			finalRunLogResults.Add(new AddPreviewResult(
+				fullPath,
+				identityPassed,
+				templatePassed,
+				tagExecutionDetails,
+				overwriteDiffs,
+				validationResult
+			));
+
+			finalValidationResults[fullPath] = validationResult;
+		}); // FIN Parallel.ForEach
+
+		// -------------------------------------------------------------------------
+		// !!! FIN DEL PROCESAMIENTO PARALELO !!!
+		// -------------------------------------------------------------------------
+		sw.Stop();
+		_consoleWriter.ClearStatusLine();
 
 		// 5. Visualización de la Tabla y Resumen (DryRun O EJECUCIÓN REAL)
-		// Pasamos 'isDryRun' para que la tabla pueda adaptar el título y el estado.
-		PrintAddPreviewTable(photos, templateTags, finalRunResults, identityDetails, templateName, overwriteTags, readyToProcessCount, skippedIdentityCount, skippedTemplateErrorCount, allowUnknownIdentity, isDryRun);
+		PrintAddPreviewTable(
+			photos,
+			templateTags,
+			finalRunLogResults.ToList(),
+			identityDetails.ToDictionary(kv => kv.Key, kv => kv.Value),
+			templateName,
+			overwriteTags,
+			readyToProcessCount,
+			skippedIdentityCount,
+			failedByTemplateValidation, // PASAMOS EL CONTADOR DE VALIDACIÓN
+			failedByWriteError,         // PASAMOS EL CONTADOR DE ESCRITURA
+			allowUnknownIdentity,
+			isDryRun);
 
-		return photosToProcess;
+		// Devolver el resultado de validación completo al Runner
+		return finalValidationResults.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
 	}
 
 	#endregion
@@ -298,6 +376,7 @@ public class MetadataService : IMetadataService
 	{
 		var tagsToDelete = new List<string> { metadataKey };
 
+		// Nota: Considerar Parallel.ForEach aquí si es necesario
 		foreach (var photo in photos)
 		{
 			try
@@ -334,6 +413,7 @@ public class MetadataService : IMetadataService
 			return photos;
 		}
 
+		// Nota: Considerar Parallel.ForEach aquí si es necesario
 		foreach (var photo in photos)
 		{
 			try
@@ -386,6 +466,7 @@ public class MetadataService : IMetadataService
 		var result = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
 		var keysArray = metadataKeys.ToArray();
 
+		// Nota: Considerar Parallel.ForEach aquí si es necesario
 		foreach (var photo in photos)
 		{
 			try
@@ -443,9 +524,6 @@ public class MetadataService : IMetadataService
 		return CheckMetadataFromTemplateBase(photos, templateTags, $"Template {templateName}", viewTypes, allowUnknownIdentity);
 	}
 
-	/// <summary>
-	/// MÉTODO BASE DE VALIDACIÓN
-	/// </summary>
 	private IReadOnlyDictionary<string, FileValidationResult> CheckMetadataFromTemplateBase(
 		IReadOnlyCollection<Photo> photos,
 		IReadOnlyCollection<TemplateTag> templateTags,
@@ -459,7 +537,6 @@ public class MetadataService : IMetadataService
 		bool showIdentityColumn = viewTypes.Contains(MetadataCheckViewType.Identity) || viewTypes.Contains(MetadataCheckViewType.IdentityDetails);
 		bool showIdentityDetails = viewTypes.Contains(MetadataCheckViewType.IdentityDetails);
 
-		// CAMBIO DE TIPO DE RESULTADO
 		var result = new Dictionary<string, FileValidationResult>(StringComparer.OrdinalIgnoreCase);
 
 		int passedCount = 0;
@@ -488,19 +565,28 @@ public class MetadataService : IMetadataService
 			// --- A. Validación de Template Tags ---
 			foreach (var tag in templateTags)
 			{
-				bool hasValue = photoMetadataDict.TryGetValue(tag.Name, out var value) &&
-							!string.IsNullOrWhiteSpace(value) &&
-							!value.Equals("undefined", StringComparison.OrdinalIgnoreCase);
+				// 1. LLAMAR A RESOLVETAGVALUE para obtener el valor real/calculado.
+				// Usamos isDryRun:true aquí para obtener el valor literal/calculado, no el comando de copia (<Tag)
+				string? resolvedValue = ResolveTagValue(photo, tag, isDryRun: true, templateTags);
 
+				// 2. Determinar si existe y es un valor utilizable
+				bool hasValue = !string.IsNullOrWhiteSpace(resolvedValue) &&
+								!resolvedValue!.Equals("undefined", StringComparison.OrdinalIgnoreCase) &&
+								!resolvedValue!.Equals("CONFIG_ERROR", StringComparison.OrdinalIgnoreCase); // También descartamos errores de configuración
+
+				// 3. Determinar la validez
 				bool isValid = hasValue || !tag.Required;
 
-				// USAMOS LA NUEVA ESTRUCTURA
-				templateCheckResults[tag.Name] = new TagValidationResult(hasValue, value ?? string.Empty, tag.Required, isValid);
+				// 4. Registrar el resultado
+				templateCheckResults[tag.Name] = new TagValidationResult(
+					hasValue,
+					resolvedValue ?? string.Empty,
+					tag.Required,
+					isValid);
 			}
 			bool templatePassed = templateCheckResults.Values.All(tv => tv.IsValid);
 
 			// --- B. Validación de Identidad ---
-			// Utilizamos el helper que genera el log Y los tags de validación
 			var (identityPassed, identityLog) = ValidateIdentityAndGenerateTags(photo, allowUnknownIdentity, identityCheckResults);
 
 			// --- C. Lógica de Estado Global (Status Column) ---
@@ -512,10 +598,10 @@ public class MetadataService : IMetadataService
 			if (rowPassed)
 			{
 				passedCount++;
-				if (identityLog.Contains("[yellow]"))
-					statusStyled = "[bold yellow]△ Warn (Identity)[/]";
+				if (identityLog.Contains("[yellow]△[/]"))
+					statusStyled = "[bold yellow]△  Warn (Identity)[/]";
 				else
-					statusStyled = "[bold green]✔ OK[/]";
+					statusStyled = "[bold green]✔  OK[/]";
 			}
 			else
 			{
@@ -556,7 +642,7 @@ public class MetadataService : IMetadataService
 
 			rows.Add(row);
 
-			// ALMACENAMIENTO DEL RESULTADO FINAL (Nueva Estructura)
+			// ALMACENAMIENTO DEL RESULTADO FINAL
 			result[photo.PhotoFile.SourceFullPath] = new FileValidationResult
 			{
 				IdentityTags = identityCheckResults.ToDictionary(kv => kv.Key, kv => kv.Value),
@@ -568,27 +654,6 @@ public class MetadataService : IMetadataService
 		_consoleWriter.WriteMarkup("[dim] [/]");
 		_consoleWriter.WriteTable(columns, rows, $"Metadata Check: {contextName}");
 		_consoleWriter.WriteMarkup("[dim] [/]");
-
-		// 5. Escribir COMMAND RESULT (como en el check original)
-		//var rule = new Rule("[bold]COMMAND RESULT[/]");
-		//rule.Justification = Justify.Center;
-		//rule.Style = new Style(foreground: Color.Yellow);
-		//AnsiConsole.Write(rule);
-
-		//_consoleWriter.WriteMarkup($"[yellow]Total Files processed:[/] [bold]{photos.Count}[/]");
-
-		//if (passedCount == photos.Count)
-		//{
-		//	_consoleWriter.WriteMarkup($"[green]✅ All files passed validation.[/]");
-		//	return result;
-		//}
-
-		//_consoleWriter.WriteMarkup($"[green]✅ Passed:[/] {passedCount}");
-		//_consoleWriter.WriteMarkup($"[red]🛑 Failed:[/] {failedCount}");
-
-		//// NOTA: El desglose de Check se hace en el Runner. Aquí simplemente se muestra un resumen básico.
-		//if (failedCount > 0)
-		//	_consoleWriter.WriteMarkup("\n[yellow]Review the table above for specific file details.[/]");
 
 		return result;
 	}
@@ -626,8 +691,6 @@ public class MetadataService : IMetadataService
 			bool isUnknown = !check.IsExif && val == "Unknown";
 			bool hasValue = !string.IsNullOrWhiteSpace(val) && val != "Unknown";
 
-			bool isCriticalMissing = !hasValue;
-
 			// 2. Determinar la validez para el chequeo general (allOk)
 			bool isValidCheck;
 
@@ -662,7 +725,7 @@ public class MetadataService : IMetadataService
 			// 5. Generación del Log de Salida (usando '△' en lugar de '⚠️')
 			if (isValidCheck)
 			{
-				if (check.Key != "TakenDate" && (isCriticalMissing || isUnknown))
+				if (check.Key != "TakenDate" && (!hasValue || isUnknown))
 				{
 					// Es Warning (Permitido) -> Usamos '△'. Esto ocurre solo si allowUnknown=true
 					string status = isUnknown ? "Unknown" : "MISSING";
@@ -678,11 +741,11 @@ public class MetadataService : IMetadataService
 			{
 				// Es un Fallo Fatal (Red) -> Usamos '✖'
 				string statusDisplay;
-				if (check.Key == "TakenDate" && isCriticalMissing)
+				if (check.Key == "TakenDate" && !hasValue)
 				{
 					statusDisplay = "[bold white on red]MISSING (CRITICAL)[/]";
 				}
-				else if (isCriticalMissing)
+				else if (!hasValue)
 				{
 					statusDisplay = "[bold white on red]MISSING[/]";
 				}
@@ -690,7 +753,7 @@ public class MetadataService : IMetadataService
 				{
 					statusDisplay = "[bold red]Unknown (Not Allowed)[/]";
 				}
-				sb.AppendLine($"[bold red]✖[/] [dim]{check.DisplayName}:[/] {statusDisplay}");
+				sb.AppendLine($"[bold red]✖[/] [dim] {check.DisplayName}:[/] {statusDisplay}");
 			}
 		}
 
@@ -708,9 +771,10 @@ public class MetadataService : IMetadataService
 		bool overwriteTags,
 		int readyToProcessCount,
 		int skippedIdentityCount,
-		int skippedTemplateErrorCount,
+		int failedByTemplateValidation, // REFACTORIZADO: Fallos de validación/cálculo
+		int failedByWriteError,         // NUEVO: Fallos de I/O en la escritura
 		bool allowUnknownIdentity,
-		bool isDryRun) // <--- NUEVO PARÁMETRO
+		bool isDryRun)
 	{
 		var columns = new List<TableColumnConfig>
 		{
@@ -728,7 +792,8 @@ public class MetadataService : IMetadataService
 		int keptUnchangedCount = 0;
 		int filesReadyToWrite = 0;
 		int failedByIdentity = 0;
-		int failedByTemplate = 0;
+		// failedByTemplate es la suma de los dos nuevos contadores de fallo de template/escritura
+		int failedByTemplate = failedByTemplateValidation + failedByWriteError;
 		int allowedUnknownWarnings = 0;
 		int missingTakenDate = 0;
 		int missingDevice = 0;
@@ -758,9 +823,13 @@ public class MetadataService : IMetadataService
 			{
 				// Fallo de Identidad, Template o de ESCRITURA REAL
 				if (!result.IdentityPassed) failedByIdentity++;
-				if (!result.TemplatePassed) failedByTemplate++;
 
-				if (!result.IdentityPassed && !result.TemplatePassed)
+				// La fila falló el Template/Escritura si no pasó el Identity Y el Template
+				// Nota: Los contadores 'failedByTemplateValidation' y 'failedByWriteError' ya se incrementaron en el bucle Parallel.
+				// Aquí solo necesitamos saber si la fila falló el Template para el mensaje de status.
+				bool templateFailedForThisRow = !result.TemplatePassed;
+
+				if (!result.IdentityPassed && templateFailedForThisRow)
 				{
 					status = isDryRun ? "[bold red]❌ Skip (Both)[/]" : "[bold red]✖ FAILED (Both)[/]";
 				}
@@ -768,7 +837,7 @@ public class MetadataService : IMetadataService
 				{
 					status = isDryRun ? "[bold red]❌ Skip (Identity)[/]" : "[bold red]✖ FAILED (Identity)[/]";
 				}
-				else
+				else // templateFailedForThisRow es true
 				{
 					status = isDryRun ? "[bold red]❌ Skip (Template)[/]" : "[bold red]✖ FAILED (Write/Tpl)[/]";
 				}
@@ -777,6 +846,7 @@ public class MetadataService : IMetadataService
 			// 2. Contadores Detallados (USANDO TagValidationResult)
 			var identityTags = result.ValidationResult.IdentityTags;
 
+			// Solo contamos los fallos detallados si el archivo Falló la Identidad (failedByIdentity)
 			if (!result.IdentityPassed)
 			{
 				// a) Fallos Críticos (Red - contamos directamente si el tag falló la validación)
@@ -794,6 +864,7 @@ public class MetadataService : IMetadataService
 				// Make/Model: Fallan si son requeridos y Make o Model no son válidos.
 				if (identityTags.TryGetValue("Make", out var makeTag) && identityTags.TryGetValue("Model", out var modelTag) && makeTag.IsRequired)
 				{
+					// Se asume que Make y Model son necesarios para considerar una 'identidad de dispositivo' completa.
 					if (!makeTag.IsValid || !modelTag.IsValid)
 						missingMakeModel++;
 				}
@@ -801,7 +872,6 @@ public class MetadataService : IMetadataService
 			else if (result.IdentityPassed && allowUnknownIdentity)
 			{
 				// b) Warnings (Yellow △ - Contamos los que pasaron pero tienen valor vacío/unknown)
-				// Usamos el log (identityDetails) que tiene el símbolo '△' para un conteo preciso de warnings
 				var identityLog = identityDetails[fullPath];
 				if (identityLog.Contains("[yellow]△[/]"))
 				{
@@ -809,12 +879,16 @@ public class MetadataService : IMetadataService
 				}
 			}
 
-			// 3. Contar Kept Unchanged
+			// 3. Contar Kept Unchanged (Solo si la validación final fue exitosa)
 			if (result.IdentityPassed && result.TemplatePassed)
 			{
-				bool hasAnyChange = result.OverwriteDifferences.Any(d => d.Value.Changed) || result.TagsResults.Any(t => t.Value.StatusColor == "cyan");
+				// Verificamos si hay algún tag nuevo (cyan) o cambiado (amarillo/overwrite diff)
+				bool hasAnyChange = result.OverwriteDifferences.Any(d => d.Value.Changed) ||
+									result.TagsResults.Any(t => t.Value.StatusColor == "cyan"); // StatusColor: cyan = New
+
 				if (!hasAnyChange)
 				{
+					// Este archivo pasó la validación PERO no tiene nada nuevo que hacer.
 					keptUnchangedCount++;
 				}
 			}
@@ -832,6 +906,7 @@ public class MetadataService : IMetadataService
 				}
 				else if (tag.Required)
 				{
+					// Fallo en la fase de resolución/validación (debería haber sido capturado antes)
 					line = $"{reqStatus} [teal]{tag.Name.EscapeMarkup()}[/]: [bold white on red]MISSING CALCULATION[/]";
 				}
 				else continue;
@@ -882,8 +957,8 @@ public class MetadataService : IMetadataService
 
 		var totalFiles = photos.Count;
 		// Passed/Failed para el resumen general son los que terminaron en Ready/Skip.
-		var passedSimulated = readyToProcessCount;
-		var failedSimulated = skippedIdentityCount + skippedTemplateErrorCount;
+		var passedSimulated = readyToProcessCount; // Archivos que cambiaron o se van a cambiar
+		var failedSimulated = skippedIdentityCount + failedByTemplate; // Archivos saltados o fallidos
 
 		_consoleWriter.WriteMarkup($"[yellow]Total Files processed:[/] [bold]{totalFiles}[/]");
 
@@ -893,8 +968,8 @@ public class MetadataService : IMetadataService
 		}
 		else
 		{
-			_consoleWriter.WriteMarkup($"[green]✅ Passed (Write/Update):[/] {passedSimulated}");
-			_consoleWriter.WriteMarkup($"[red]🛑 Failed (Skipped):[/] {failedSimulated}");
+			_consoleWriter.WriteMarkup($"[green]✅ Passed (Write/Update):[/] [bold]{passedSimulated}[/]");
+			_consoleWriter.WriteMarkup($"[red]🛑 Failed (Skipped):[/] [bold]{failedSimulated}[/]");
 		}
 
 		// -------------------------------------------------------------------------
@@ -906,13 +981,25 @@ public class MetadataService : IMetadataService
 		if (failedByIdentity > 0)
 			_consoleWriter.WriteMarkup($"• [yellow]Required Data (Identity) Missing/Invalid:[/][bold red] {failedByIdentity}[/] files");
 
-		// El fallo de template incluye el fallo de escritura real si no es Dry Run.
+		// El fallo de template/escritura (failedByTemplate)
 		if (failedByTemplate > 0)
 		{
 			var failureType = isDryRun ? "Missing" : "Missing / Write Error";
 			_consoleWriter.WriteMarkup($"• [yellow]Required Tags (Template) {failureType}:[/][bold red] {failedByTemplate}[/] files");
 		}
 
+		// -------------------------------------------------------------------------
+		// TEMPLATE / WRITE FAILURE DETAILS (NUEVO DESGLOSE)
+		// -------------------------------------------------------------------------
+		if (failedByTemplateValidation > 0 || failedByWriteError > 0)
+		{
+			_consoleWriter.WriteMarkup("\n[bold underline]Template / Write Failure Details:[/]");
+			if (failedByTemplateValidation > 0)
+				_consoleWriter.WriteMarkup($"  - Validation Failed (Missing Tags/Calc Error): [red]{failedByTemplateValidation}[/]");
+
+			if (failedByWriteError > 0)
+				_consoleWriter.WriteMarkup($"  - Write Operation Failed (I/O Error): [red]{failedByWriteError}[/]");
+		}
 
 		// -------------------------------------------------------------------------
 		// MISSING IDENTITY DATA DETAILS
@@ -950,6 +1037,52 @@ public class MetadataService : IMetadataService
 	}
 
 
+	/// <summary>
+	/// Actualiza el diccionario tagExecutionDetails con los valores leídos del disco después de una escritura exitosa.
+	/// </summary>
+	private void RecalculateTagDetailsForSuccessfulWrite(
+		Photo photo,
+		IReadOnlyCollection<TemplateTag> templateTags,
+		Dictionary<string, (string Value, string StatusColor, string DisplayText)> tagExecutionDetails)
+	{
+		var photoMetadataDict = photo.ExifData.Metadata;
+
+		foreach (var tag in templateTags)
+		{
+			// Si el tag ya fue marcado como 'Kept' en la fase de simulación (que no se iba a escribir), lo conservamos
+			// y solo actualizamos los tags que se intentaron escribir (aquellos que no están marcados como Kept/Empty).
+
+			if (tagExecutionDetails.TryGetValue(tag.Name, out var existingResult) &&
+				existingResult.DisplayText.Contains("(Kept)"))
+			{
+				continue;
+			}
+
+			// 1. Intentamos obtener el valor final REAL que se leyó del archivo
+			bool existsInFile = photoMetadataDict.TryGetValue(tag.Name, out var actualValue) &&
+							!string.IsNullOrWhiteSpace(actualValue) &&
+							!actualValue.Equals("undefined", StringComparison.OrdinalIgnoreCase);
+
+			string tagValueDisplay = actualValue.EscapeMarkup() ?? string.Empty;
+
+			if (existsInFile)
+			{
+				// El tag fue escrito y verificado en el disco.
+				// Usamos el valor real leído del archivo (actualValue)
+				string displayText = $"[green]{tagValueDisplay}[/] (Wrote/Verified)";
+				tagExecutionDetails[tag.Name] = (tagValueDisplay, "green", displayText);
+			}
+			else if (tag.Required)
+			{
+				// Fallo de verificación: Estaba requerido/se intentó escribir, pero el valor no se encuentra.
+				string displayText = $"[bold red]✖ FAILED: Missing After Write[/]";
+				tagExecutionDetails[tag.Name] = (string.Empty, "red", displayText);
+			}
+			// Si no existe y no es requerido (opcional), no actualizamos el log de ejecución.
+		}
+	}
+
+
 	// MANTENER WriteMetadataBatch para el modo simple Key/Value
 	private IReadOnlyCollection<Photo> WriteMetadataBatch(
 		IReadOnlyCollection<Photo> photos,
@@ -961,6 +1094,7 @@ public class MetadataService : IMetadataService
 			? $"-{t.Key}{t.Value}"
 			: $"-{t.Key}='{t.Value.EscapeMarkup()}'"));
 
+		// Nota: Considerar Parallel.ForEach aquí si es necesario
 		foreach (var photo in photos)
 		{
 			try
@@ -975,7 +1109,7 @@ public class MetadataService : IMetadataService
 
 					exifTool.WriteTags(photo.PhotoFile.SourcePath, tagsToWrite, overwriteOriginal: true);
 					_statistics.PhotosMetadataProcessed++;
-					_consoleWriter.Write($"✅ Added metadata ([dim]{contextName}[/]) to [bold]{photo.PhotoFile.FileName.EscapeMarkup()}[/].");
+					// ELIMINADO: Log de éxito en paralelo
 				}
 			}
 			catch (Exception ex)
@@ -988,30 +1122,94 @@ public class MetadataService : IMetadataService
 	}
 
 	/// <summary>
-	/// Escribe metadatos para una sola foto (usado en AddMetadataFromTemplate en modo real).
+	/// Escribe metadatos para una sola foto, y si tiene éxito, actualiza los metadatos de la Photo usando el Appender Service.
 	/// </summary>
-	private bool WriteMetadataForPhoto(
+	private (bool Success, Photo? UpdatedPhoto) WriteMetadataForPhoto(
 		Photo photo,
 		List<KeyValuePair<string, string>> tagsToWrite,
 		string contextName)
 	{
 		try
 		{
+			// ¡IMPORTANTE! Crear nueva instancia de ExifTool para asegurar Thread Safety en Paralelismo
 			using (var exifTool = new ExifTool(exiftoolConfigPath: _options.ExifToolFileConfig))
 			{
 				exifTool.WriteTags(photo.PhotoFile.SourcePath, tagsToWrite, overwriteOriginal: true);
 				_statistics.PhotosMetadataProcessed++;
-				_consoleWriter.Write($"✅ [bold]Added metadata[/] ([dim]{contextName}[/]) to [bold]{photo.PhotoFile.FileName.EscapeMarkup()}[/].");
-				return true;
+				// ELIMINADO: Log de éxito en paralelo
+
+				// REFRESH (ACTUALIZACIÓN DE LA INSTANCIA PHOTO)
+				var updatedPhotos = _exifDataAppenderService.ExtractExifData(
+									new[] { photo },
+									out _, out _, out _, out _, out _, out _,
+									isSilent: true);
+
+				var updatedPhoto = updatedPhotos.FirstOrDefault();
+
+				if (updatedPhoto == null)
+				{
+					_logger.LogWarning("Failed to refresh metadata for {File} after successful write.", photo.PhotoFile.SourcePath);
+					return (true, photo);
+				}
+
+				return (true, updatedPhoto);
 			}
 		}
 		catch (Exception ex)
 		{
 			_logger.LogError(ex, "Error adding metadata ({Context}) to {File}", contextName, photo.PhotoFile.SourcePath);
 			_statistics.InternalError++;
-			_consoleWriter.Write($"❌ [bold red]Failed to add metadata[/] ([dim]{contextName}[/]) to [bold]{photo.PhotoFile.FileName.EscapeMarkup()}[/]. See log for details.");
-			return false;
+			// ELIMINADO: Log de fallo en paralelo
+			return (false, photo);
 		}
+	}
+
+	/// <summary>
+	/// Revalida los tags del template usando la foto recién actualizada (después de la escritura).
+	/// </summary>
+	private (bool Passed, Dictionary<string, TagValidationResult> Results) RevalidateTemplateTags(Photo photo, IReadOnlyCollection<TemplateTag> templateTags)
+	{
+		var templateCheckResults = new Dictionary<string, TagValidationResult>(StringComparer.OrdinalIgnoreCase);
+		var photoMetadataDict = photo.ExifData.Metadata;
+		bool templateError = false;
+
+		foreach (var tag in templateTags)
+		{
+			// Solo necesitamos verificar si el tag escrito está presente
+			bool hasValue = photoMetadataDict.TryGetValue(tag.Name, out var value) &&
+						!string.IsNullOrWhiteSpace(value) &&
+						!value.Equals("undefined", StringComparison.OrdinalIgnoreCase);
+
+			bool isValid = hasValue || !tag.Required;
+
+			if (!isValid)
+			{
+				templateError = true;
+			}
+
+			templateCheckResults[tag.Name] = new TagValidationResult(hasValue, value ?? string.Empty, tag.Required, isValid);
+		}
+
+		return (!templateError, templateCheckResults);
+	}
+
+	/// <summary>
+	/// Muestra y actualiza el progreso en una sola línea de consola (Status Console).
+	/// </summary>
+	private void UpdateConsoleStatus(int processed, int total, TimeSpan elapsed, string currentFile)
+	{
+		if (total == 0 || processed == 0) return;
+
+		double percent = (double)processed / total;
+
+		// Cálculo simple de tiempo restante
+		TimeSpan remaining = TimeSpan.FromMilliseconds(
+			(total - processed) * (elapsed.TotalMilliseconds / processed)
+		);
+
+		string statusLine = $"[{processed}/{total}] | Progreso: {percent:P0} | Est. Restante: {remaining:mm\\:ss} | Procesando: {currentFile.EscapeMarkup()}";
+
+		_consoleWriter.WriteStatusLine(statusLine);
 	}
 
 
@@ -1069,7 +1267,8 @@ public class MetadataService : IMetadataService
 			if (sourceTag != null)
 			{
 				// ¡Resolución dinámica! Llamar recursivamente para obtener el valor que debería tener el tag de origen.
-				return ResolveTagValue(photo, sourceTag, isDryRun, allTemplateTags);
+				// OJO: Usamos isDryRun=true en la recursión para que no devuelva comandos de copia (<Tag)
+				return ResolveTagValue(photo, sourceTag, isDryRun: true, allTemplateTags);
 			}
 
 			// C. Si el tag de origen NO está en el template (se asume que existe en el archivo):

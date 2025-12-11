@@ -1,5 +1,5 @@
 using PhotoCli.Core.Services.Contracts;
-using Spectre.Console; // Añadido para usar los componentes avanzados de CLI
+using Spectre.Console;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using PhotoCli.Core.Models.SpectreConsole;
+using System.IO.Abstractions;
 
 namespace PhotoCli.Core.Services.Implementations;
 
@@ -15,9 +16,12 @@ public class ConsoleWriter : IConsoleWriter
 	private static readonly object PhotoInprogressLock = new();
 	private readonly TextWriter _textWriter;
 	private readonly ILogger<ConsoleWriter> _logger;
+	private readonly IFileSystem _fileSystem; // Se asume que usas IFileSystem para WriteFileTree
+
 	private string? _previousProgressName;
 	private int _progressCompletedCount;
 	private int _progressTotalCount;
+	private string? _lastStatusMessage;
 
 	public ConsoleWriter(TextWriter textWriter, ILogger<ConsoleWriter> logger)
 	{
@@ -30,7 +34,6 @@ public class ConsoleWriter : IConsoleWriter
 
 	public void Write(string value)
 	{
-		// Para la escritura simple, usamos Spectre.Console para renderizar el marcado.
 		AnsiConsole.MarkupLine(value.EscapeMarkup());
 	}
 
@@ -41,43 +44,31 @@ public class ConsoleWriter : IConsoleWriter
 
 	public void WriteError(string value)
 	{
-		// Implementación para mensajes de error estilizados
 		AnsiConsole.MarkupLine($"[red bold]ERROR:[/] {value.EscapeMarkup()}");
 	}
 
 	public void WriteCommandSummary(string commandName, string sourceFolder, string templateName)
 	{
-		// Limpiamos y estandarizamos el nombre del comando
 		var formattedCommand = commandName.ToUpper().Replace("-", " ");
-
-		// Usamos FullName para manejar rutas UNC de red correctamente si es necesario
-		var sourceFolderName = new DirectoryInfo(sourceFolder).FullName;
+		var sourceFolderName = sourceFolder;
 
 		var rule = new Rule("[bold]COMMAND SUMMARY[/]");
 		rule.Justification = Justify.Center;
 		rule.Style = new Style(foreground: Color.Yellow);
 		AnsiConsole.Write(rule);
 
-		// 1. Imprimir Comando
 		AnsiConsole.MarkupLine($"[bold]Command:[/]\t[green]{formattedCommand.EscapeMarkup()}[/]");
 
-		// 2. Configurar y escribir la ruta de origen (Source Dir)
 		var path = new TextPath(sourceFolderName);
 		path.RootStyle = new Style(foreground: Color.Red);
 		path.SeparatorStyle = new Style(foreground: Color.Green);
 		path.StemStyle = new Style(foreground: Color.Blue);
 		path.LeafStyle = new Style(foreground: Color.Yellow);
 
-		// Escribir el label sin salto de línea
 		AnsiConsole.Markup($"[bold]Source Dir:[/]\t");
-
-		// Escribir el objeto TextPath
 		AnsiConsole.Write(path);
-
-		// FIX: Añadir un salto de línea explícito para que el siguiente elemento comience abajo.
 		AnsiConsole.WriteLine();
 
-		// 3. Imprimir Template (si existe)
 		if (!string.IsNullOrWhiteSpace(templateName))
 		{
 			AnsiConsole.MarkupLine($"[bold]Template:[/]\t[cyan]{templateName.EscapeMarkup()}[/]");
@@ -93,32 +84,25 @@ public class ConsoleWriter : IConsoleWriter
 			.Border(TableBorder.Square)
 			.BorderColor(Color.Grey)
 			.ShowRowSeparators()
-			.Expand(); // Expande la tabla para usar todo el ancho disponible
-
-		// --- LÓGICA DE CONFIGURACIÓN DE COLUMNAS ---
+			.Expand();
 
 		foreach (var config in columns)
 		{
-			// 1. Crear el objeto de columna con el texto del encabezado
 			var column = new TableColumn($"[bold blue]{config.HeaderText}[/]");
 
-			// 2. Aplicar NoWrap si está configurado
 			if (config.NoWrap)
 			{
 				column.NoWrap();
 			}
 
-			// 3. Aplicar Width si está configurado
 			if (config.Width.HasValue)
 			{
 				column.Width(config.Width.Value);
 			}
 
-			// 4. Añadir la columna configurada a la tabla
 			table.AddColumn(column);
 		}
 
-		// Añadir las filas
 		foreach (var rowData in rows)
 		{
 			table.AddRow(rowData.ToArray());
@@ -127,27 +111,16 @@ public class ConsoleWriter : IConsoleWriter
 		AnsiConsole.Write(table);
 	}
 
-	/// <summary>
-	/// Muestra una estructura jerárquica de archivos usando un Tree.
-	/// </summary>
-	// ... (Resto del método WriteFileTree se mantiene igual) ...
 	public void WriteFileTree(string title, string rootPath, IReadOnlyCollection<string> filePaths)
 	{
-		// El contenedor principal es de tipo Tree.
 		var tree = new Tree($"[bold brightwhite]{title} ({rootPath})[/]");
-
-		// El mapa DEBE contener instancias de TreeNode
 		var nodeMap = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
 
 		foreach (var fullPath in filePaths)
 		{
 			var relativePath = Path.GetRelativePath(rootPath, fullPath);
 			var parts = relativePath.Split(Path.DirectorySeparatorChar);
-
-			// currentContainer puede ser o bien el Tree (para la primera carpeta) o un TreeNode
-			// Reiniciamos el contenedor para cada archivo
 			object currentContainer = tree;
-
 			var currentRelativePath = string.Empty;
 
 			for (int i = 0; i < parts.Length; i++)
@@ -155,7 +128,6 @@ public class ConsoleWriter : IConsoleWriter
 				var part = parts[i];
 				var isFile = (i == parts.Length - 1) && !string.IsNullOrEmpty(Path.GetExtension(part));
 
-				// Construcción de la clave de la carpeta
 				if (i > 0)
 				{
 					currentRelativePath = Path.Combine(currentRelativePath, part);
@@ -167,44 +139,35 @@ public class ConsoleWriter : IConsoleWriter
 
 				if (isFile)
 				{
-					// Es un archivo, lo añadimos al contenedor actual (que será un TreeNode)
 					if (currentContainer is TreeNode node)
 					{
 						node.AddNode($"[green]{part}[/]");
 					}
 					else
 					{
-						// Esto solo ocurriría si el archivo está directamente en la raíz y rootPath es ".", pero es seguro
 						tree.AddNode($"[green]{part}[/]");
 					}
 				}
 				else
 				{
-					// Es una carpeta
 					if (nodeMap.TryGetValue(currentRelativePath, out var existingNode))
 					{
-						// La carpeta ya existe, moverse a ella
 						currentContainer = existingNode;
 					}
 					else
 					{
-						// La carpeta no existe, crearla y añadirla al contenedor padre
 						TreeNode folderNode;
 
 						if (currentContainer is TreeNode parentNode)
 						{
 							folderNode = parentNode.AddNode($"[yellow]{part}/[/]");
 						}
-						else // Si currentContainer es el Tree (raíz)
+						else
 						{
-							// Esta es la primera carpeta de la ruta.
 							folderNode = tree.AddNode($"[yellow]{part}/[/]");
 						}
 
-						// Añadir el nuevo nodo al mapa para su posterior búsqueda
 						nodeMap.Add(currentRelativePath, folderNode);
-
-						// Moverse al nodo de la carpeta recién creada
 						currentContainer = folderNode;
 					}
 				}
@@ -217,7 +180,7 @@ public class ConsoleWriter : IConsoleWriter
 
 	#endregion
 
-	#region Métodos de Progreso Originales (Implementados usando TextWriter/Logger y Spectre.Console)
+	#region Métodos de Progreso Originales
 
 	public void ProgressStart(string name, int? totalCount = null)
 	{
@@ -235,7 +198,6 @@ public class ConsoleWriter : IConsoleWriter
 		lock (PhotoInprogressLock)
 		{
 			TryToClearConsoleLastLine(name);
-			// Usamos AnsiConsole para asegurar que el porcentaje se escriba en el stream correcto si es interactivo
 			AnsiConsole.MarkupLine($"[grey]{name}: {(float)_progressCompletedCount / _progressTotalCount:0%} - ({_progressCompletedCount}/{_progressTotalCount})[/]");
 			_previousProgressName = name;
 		}
@@ -245,10 +207,55 @@ public class ConsoleWriter : IConsoleWriter
 	{
 		_progressCompletedCount = 0;
 		TryToClearConsoleLastLine(name);
-		// Usamos SC para asegurar la escritura completa y el color de finalización
 		AnsiConsole.MarkupLine($"[bold green]{name}: finished. {additionalInformation.EscapeMarkup()}[/]");
 		_logger.LogInformation("Progress {ProgressName} finished", name);
 		_previousProgressName = name;
+	}
+
+	#endregion
+
+	#region Métodos de Status Line (Para Paralelismo)
+
+	public void WriteStatusLine(string statusMessage)
+	{
+		lock (PhotoInprogressLock)
+		{
+			// 1. Limpiamos cualquier cosa anterior (progreso o status anterior)
+			TryToClearConsoleLastLine(null);
+
+			if (UserInteractive())
+			{
+				// 2. Usar AnsiConsole.Markup para asegurar el parsing de colores y la escritura sin salto de línea
+				AnsiConsole.Markup(statusMessage.EscapeMarkup());
+			}
+			else
+			{
+				_logger.LogTrace("Status: {Status}", statusMessage);
+			}
+
+			// 3. Guardar el nuevo mensaje.
+			_lastStatusMessage = statusMessage;
+			_previousProgressName = null;
+		}
+	}
+
+	public void ClearStatusLine()
+	{
+		lock (PhotoInprogressLock)
+		{
+			if (_lastStatusMessage != null || _previousProgressName != null)
+			{
+				// 1. Limpiamos la línea actual (donde está el status)
+				TryToClearConsoleLastLine(null);
+
+				// 2. Escribimos una línea vacía para garantizar que la siguiente escritura estática 
+				//    comience en una nueva línea limpia y no sobre el log inicial.
+				AnsiConsole.MarkupLine(string.Empty);
+
+				_lastStatusMessage = null;
+				_previousProgressName = null;
+			}
+		}
 	}
 
 	#endregion
@@ -270,7 +277,7 @@ public class ConsoleWriter : IConsoleWriter
 			_textWriter.WriteLine(toWrite);
 	}
 
-	private void TryToClearConsoleLastLine(string name)
+	private void TryToClearConsoleLastLine(string? name)
 	{
 		if (!UserInteractive())
 		{
@@ -278,21 +285,27 @@ public class ConsoleWriter : IConsoleWriter
 			return;
 		}
 
-		if (_previousProgressName != name)
-			return;
+		if (name != null)
+		{
+			if (_previousProgressName != name) return;
+		}
+		else
+		{
+			if (_lastStatusMessage == null && _previousProgressName == null) return;
+		}
 
-		// Lógica de manipulación del cursor
 		if (Console.CursorTop > 0)
 			Console.SetCursorPosition(0, Console.CursorTop);
+
 		if (Console.WindowWidth > 0)
 			_textWriter.Write(new string(' ', Console.WindowWidth));
+
 		if (Console.CursorTop > 0)
 			Console.SetCursorPosition(0, Console.CursorTop - 1);
 	}
 
 	private bool UserInteractive()
 	{
-		// Lógica para determinar si la consola es interactiva (y no un entorno de prueba)
 		return Environment.UserInteractive && !Environment.CurrentDirectory.Contains("tests", StringComparison.OrdinalIgnoreCase);
 	}
 

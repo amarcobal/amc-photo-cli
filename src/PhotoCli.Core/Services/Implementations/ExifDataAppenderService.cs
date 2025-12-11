@@ -1,5 +1,6 @@
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Services.Contracts;
+using System.Collections.Generic;
 
 namespace PhotoCli.Core.Services.Implementations;
 
@@ -17,15 +18,21 @@ public class ExifDataAppenderService : IExifDataAppenderService
 		_consoleWriter = consoleWriter;
 	}
 
-	public IReadOnlyCollection<Photo> ExtractExifData(IReadOnlyCollection<Photo> photos, out bool allPhotosAreValid, out bool allPhotosHasPhotoTaken, out bool allPhotosHasCoordinate)
+	public IReadOnlyCollection<Photo> ExtractExifData(
+		IReadOnlyCollection<Photo> photos,
+		out bool allPhotosAreValid,
+		out bool allPhotosHasPhotoTaken,
+		out bool allPhotosHasCoordinate,
+		bool isSilent = false)
 	{
-		_consoleWriter.ProgressStart(ProgressName, _statistics.PhotosFound);
+		if (!isSilent)
+		{
+			_consoleWriter.ProgressStart(ProgressName, _statistics.PhotosFound);
+		}
+
 		var photosAreValid = true;
 		var photosHasPhotoTaken = true;
 		var photosHasCoordinate = true;
-		var photosHasMakeModel = true;
-		var photosHasSubSeconds = true;
-		var photosHasOriginalFileName = true;
 
 		foreach (var photo in photos)
 		{
@@ -38,19 +45,39 @@ public class ExifDataAppenderService : IExifDataAppenderService
 				photosHasCoordinate = false;
 			if (exifData != null)
 				photo.SetExifData(exifData);
-			_consoleWriter.InProgressItemComplete(ProgressName);
+
+			if (!isSilent)
+			{
+				_consoleWriter.InProgressItemComplete(ProgressName);
+			}
 		}
 
-		_consoleWriter.ProgressFinish(ProgressName);
+		if (!isSilent)
+		{
+			_consoleWriter.ProgressFinish(ProgressName);
+		}
+
 		allPhotosAreValid = photosAreValid;
 		allPhotosHasPhotoTaken = photosHasPhotoTaken;
 		allPhotosHasCoordinate = photosHasCoordinate;
 		return photos;
 	}
 
-	public IReadOnlyCollection<Photo> ExtractExifData(IReadOnlyCollection<Photo> photos, out bool allPhotosAreValid, out bool allPhotosHasPhotoTaken, out bool allPhotosHasCoordinate, out bool allPhotosHasMakeModel, out bool allPhotosHasSubseconds, out bool allPhotosHasOriginalFileName)
+	public IReadOnlyCollection<Photo> ExtractExifData(
+		IReadOnlyCollection<Photo> photos,
+		out bool allPhotosAreValid,
+		out bool allPhotosHasPhotoTaken,
+		out bool allPhotosHasCoordinate,
+		out bool allPhotosHasMakeModel,
+		out bool allPhotosHasSubseconds,
+		out bool allPhotosHasOriginalFileName,
+		bool isSilent = false)
 	{
-		_consoleWriter.ProgressStart(ProgressName, _statistics.PhotosFound);
+		if (!isSilent)
+		{
+			_consoleWriter.ProgressStart(ProgressName, _statistics.PhotosFound);
+		}
+
 		var photosAreValid = true;
 		var photosHasPhotoTaken = true;
 		var photosHasCoordinate = true;
@@ -75,10 +102,18 @@ public class ExifDataAppenderService : IExifDataAppenderService
 				photosHasOriginalFileName = false;
 			if (exifData != null)
 				photo.SetExifData(exifData);
-			_consoleWriter.InProgressItemComplete(ProgressName);
+
+			if (!isSilent)
+			{
+				_consoleWriter.InProgressItemComplete(ProgressName);
+			}
 		}
 
-		_consoleWriter.ProgressFinish(ProgressName);
+		if (!isSilent)
+		{
+			_consoleWriter.ProgressFinish(ProgressName);
+		}
+
 		allPhotosAreValid = photosAreValid;
 		allPhotosHasPhotoTaken = photosHasPhotoTaken;
 		allPhotosHasCoordinate = photosHasCoordinate;

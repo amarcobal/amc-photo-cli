@@ -1,6 +1,6 @@
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Models.Enums;
-using System.Collections.Generic; // Necesario para IReadOnlyCollection
+using System.Collections.Generic;
 
 namespace PhotoCli.Core.Services.Contracts;
 
@@ -11,10 +11,11 @@ public interface IMetadataService
 
 	/// <summary>
 	/// Añade metadatos basados en un template, resolviendo las variables directamente desde el objeto Photo.
+	/// Devuelve el resultado detallado de la validación y ejecución para el log de resumen.
 	/// </summary>
 	/// <param name="overwriteTags">Indica si los tags existentes deben ser sobrescritos.</param>
 	/// <param name="allowUnknownIdentity">Permite procesar archivos aunque falten datos de identidad (Author/Device) obligatorios.</param>
-	IReadOnlyCollection<Photo> AddMetadataFromTemplate(
+	IReadOnlyDictionary<string, FileValidationResult> AddMetadataFromTemplate( // <-- ¡ESTE ES EL CAMBIO CLAVE!
 		IReadOnlyCollection<Photo> photos,
 		string templateName,
 		bool isDryRun = false,
@@ -47,12 +48,12 @@ public interface IMetadataService
 	/// Realiza la validación de un template contra una colección de fotos.
 	/// </summary>
 	/// <param name="allowUnknownIdentity">Permite que el chequeo de identidad pase si Author/Device es 'Unknown'.</param>
-	IReadOnlyDictionary<string, FileValidationResult> CheckMetadataFromTemplate( // <-- CAMBIO DE TIPO DE RETORNO
+	IReadOnlyDictionary<string, FileValidationResult> CheckMetadataFromTemplate(
 		IReadOnlyCollection<Photo> photos,
 		string templateName,
 		IReadOnlyCollection<MetadataCheckViewType> metadataViewTypes,
 		bool allowUnknownIdentity = false);
 
-	IReadOnlyDictionary<string, FileValidationResult> CheckMetadata(IReadOnlyCollection<Photo> photos, string metadataKey, bool isRequired = true); // <-- CAMBIO DE TIPO DE RETORNO
+	IReadOnlyDictionary<string, FileValidationResult> CheckMetadata(IReadOnlyCollection<Photo> photos, string metadataKey, bool isRequired = true);
 	#endregion
 }
