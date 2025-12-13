@@ -10,4 +10,6 @@ public static class Constants
 
 	public const string DefaultDevice = "Unknown";
 	public const string DefaultAuthor = "Unknown";
+
+	public const string MetadataNotSetValue = "[NOT_SET]";
 }

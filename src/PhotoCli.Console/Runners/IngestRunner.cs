@@ -121,7 +121,7 @@ public class IngestRunner : BaseRunner, IConsoleRunner
 				// Let's assume we want to enforce the template.
 				
 				_consoleWriter.Write($"[bold cyan]Injecting metadata from template:[/] {_options.Template}");
-				_metadataService.AddMetadataFromTemplate(photos, _options.Template, _options.IsDryRun);
+				//_metadataService.AddMetadataFromTemplate(photos, _options.Template, _options.IsDryRun);
 
 				// 4.4 Re-Extract Data (Critical to get new values for grouping)
 				if (!_options.IsDryRun)

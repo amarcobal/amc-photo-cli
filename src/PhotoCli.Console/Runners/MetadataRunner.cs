@@ -97,6 +97,9 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 		// 4. Ejecutar operación de metadata
 		try
 		{
+			// Lógica común de vistas para 'Add' y 'Check'
+			var viewTypes = _options.View.ToList();
+
 			switch (_options.Operation)
 			{
 				// ----------------------------------------------------
@@ -105,12 +108,17 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 				case MetadataOperation.Add:
 					if (!string.IsNullOrWhiteSpace(_options.Template))
 					{
+						// [CORRECCIÓN APLICADA]: 
+						// No se añaden vistas por defecto. Si viewTypes está vacío, solo se mostrarán File y Status.
+
 						_metadataService.AddMetadataFromTemplate(
 							photos,
 							_options.Template,
+							viewTypes.AsReadOnly(),
 							_options.IsDryRun,
 							_options.OverwriteTags,
-							_options.AllowUnknownIdentity);
+							_options.AllowUnknownIdentity
+						);
 					}
 					else if (!string.IsNullOrWhiteSpace(_options.Key) && _options.Value != null)
 					{
@@ -166,13 +174,11 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 				// photo-cli metadata check ...
 				// ----------------------------------------------------
 				case MetadataOperation.Check:
-					// FIRMA MODIFICADA PARA USAR LA NUEVA ESTRUCTURA
 					IReadOnlyDictionary<string, FileValidationResult> checkResults;
-
-					var viewTypes = _options.View.ToList();
 
 					if (!string.IsNullOrWhiteSpace(_options.Template))
 					{
+						// La operación 'check' necesita la vista de plantilla por defecto para ser funcional.
 						if (!viewTypes.Any())
 						{
 							viewTypes.Add(MetadataCheckViewType.Template);
@@ -225,7 +231,6 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 	/// <summary>
 	/// Escribe un resumen estadístico detallado de los resultados de la validación.
 	/// </summary>
-	// FIRMA MODIFICADA
 	private void LogCheckSummary(IReadOnlyDictionary<string, FileValidationResult> results)
 	{
 		if (results == null || results.Count == 0)
@@ -273,7 +278,7 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 			}
 
 			// -------------------------------------------------------------------------
-			// AÑADIDO: Detección de Warnings (Archivos ACEPTADOS por allow-unknown-identity)
+			// Detección de Warnings (Archivos ACEPTADOS por allow-unknown-identity)
 			if (identityOk)
 			{
 				var isMissingRelaxedData =
@@ -335,12 +340,12 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 		}
 
 		// -------------------------------------------------------------------------
-		// AÑADIDO: Escritura del resumen de Warnings
+		// Escritura del resumen de Warnings
 		if (allowedUnknownWarnings > 0)
 		{
 			_consoleWriter.WriteMarkup("\n[bold underline]Identity Warnings (Allow Unknown):[/]");
 			_consoleWriter.WriteMarkup($"• [yellow]Files accepted with missing/unknown identity:[/][bold] {allowedUnknownWarnings}[/] files");
-			_consoleWriter.WriteMarkup("  [dim](These files were allowed to pass Identity Check due to the allow-unknown-identity flag)[/]");
+			_consoleWriter.WriteMarkup("  [dim](These files were allowed to pass Identity Check due to the allow-unknown-identity flag)[/]");
 		}
 		// -------------------------------------------------------------------------
 
@@ -367,6 +372,4 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 		}
 		return false;
 	}
-
-	// MÉTODO AUXILIAR IsSystemTagInvalid ELIMINADO/REEMPLAZADO
 }

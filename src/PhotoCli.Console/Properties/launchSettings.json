@@ -35,7 +35,7 @@
     },
     "Metadata - PC - 1.1 Check (Template)": {
       "commandName": "Project",
-      "commandLineArgs": "metadata --operation check --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox-test-add\" --view IdentityDetails TemplateDetails"
+      "commandLineArgs": "metadata --operation check --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" "
     },
     "Metadata - PC - 1.2 Check (Template) - Allow Unknown Identity": {
       "commandName": "Project",
@@ -47,19 +47,19 @@
     },
     "Metadata - PC - 3. Add (Template) - DryRun": {
       "commandName": "Project",
-      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" -d"
+      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --view IdentityDetails TemplateDetails -d"
     },
     "Metadata - PC - 3.1 Add (Template) - DryRun - Allow Unknown Identity": {
       "commandName": "Project",
-      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox-test-add\" -d --allow-unknown-identity"
+      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --view IdentityDetails TemplateDetails -d --allow-unknown-identity"
     },
     "Metadata - PC - 3.2 Add (Template) - REAL - Allow Unknown Identity": {
       "commandName": "Project",
-      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox-test-add\" --allow-unknown-identity"
+      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --allow-unknown-identity"
     },
     "Metadata - PC - 3.3 Add (Template) - REAL - Allow Unknown Identity - Overwrite Tags": {
       "commandName": "Project",
-      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox-test-add\" --allow-unknown-identity --overwrite-tags"
+      "commandLineArgs": "metadata --operation add --template \"AMC-Basic-Metadata\" -i \"C:\\Work\\Photography\\Test\\Photo-cli\\Inbox\" --allow-unknown-identity --overwrite-tags"
     },
     "Metadata - PC - 4. Delete (Template) - DryRun": {
       "commandName": "Project",

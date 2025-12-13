@@ -13,6 +13,8 @@ using PhotoCli.Core.Models.SpectreConsole;
 using System.Threading.Tasks;
 using PhotoCli.Migrations;
 using PhotoCli.Core.Services.Contracts.SpectreConsole;
+using System.Reflection.Metadata;
+using PhotoCli.Core.Utils;
 
 namespace PhotoCli.Core.Services.Implementations;
 
@@ -22,7 +24,8 @@ public record AddPreviewResult(
 	bool TemplatePassed,
 	Dictionary<string, (string Value, string StatusColor, string DisplayText)> TagsResults,
 	Dictionary<string, (string OriginalValue, string NewValue, bool Changed)> OverwriteDifferences,
-	FileValidationResult ValidationResult
+	FileValidationResult ValidationResult,
+	MetadataRunStatus RunStatus // <-- NUEVO: Estado final de ejecución
 );
 
 public class MetadataService : IMetadataService
@@ -58,7 +61,7 @@ public class MetadataService : IMetadataService
 		{ "OriginalFileName", p => p.PhotoFile.FileNameWithExtension },
 		{ "Make", p => p.Make },
 		{ "Model", p => p.Model },
-		{ "OriginalSubseconds", p => p.HasSubSeconds ? p.Subseconds?.Padded() : new SubSeconds("0").Padded() },
+		{ "OriginalSubseconds", p => p.HasSubSeconds ? p.Subseconds?.Padded() : Constants.MetadataNotSetValue },
 	};
 
 	public MetadataService(
@@ -97,6 +100,7 @@ public class MetadataService : IMetadataService
 	public IReadOnlyDictionary<string, FileValidationResult> AddMetadataFromTemplate(
 	IReadOnlyCollection<Photo> photos,
 	string templateName,
+	IReadOnlyCollection<MetadataCheckViewType> viewTypes,
 	bool isDryRun,
 	bool overwriteTags,
 	bool allowUnknownIdentity)
@@ -108,7 +112,7 @@ public class MetadataService : IMetadataService
 		var finalRunLogResults = new List<AddPreviewResult>();
 		var identityDetails = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-		// Contadores simples
+		// Contadores simples (Se mantienen pero se ignora la cuenta al final de este método, se delega a PrintAddPreviewTable)
 		int readyToProcessCount = 0;
 		int skippedIdentityCount = 0;
 		int failedByTemplateValidation = 0;
@@ -144,6 +148,7 @@ public class MetadataService : IMetadataService
 				bool templateError = false;
 				bool templatePassed = false;
 				bool writeSuccess = true;
+				MetadataRunStatus runStatus = MetadataRunStatus.NotApplicable; // <--- INICIALIZACIÓN DEL NUEVO ESTADO
 
 				var identityCheckResults = new Dictionary<string, TagValidationResult>(StringComparer.OrdinalIgnoreCase);
 				var templateCheckResults = new Dictionary<string, TagValidationResult>(StringComparer.OrdinalIgnoreCase);
@@ -173,8 +178,24 @@ public class MetadataService : IMetadataService
 							continue;
 						}
 
-						if (string.IsNullOrWhiteSpace(resolvedValue) || resolvedValue == new SubSeconds("0").Padded())
+						// --- INICIO: LÓGICA DE VALOR FALTANTE / SENTINELA ---
+
+						bool isNotApplicable = resolvedValue?.Equals(Constants.MetadataNotSetValue, StringComparison.Ordinal) ?? false;
+
+						if (string.IsNullOrWhiteSpace(resolvedValue) || isNotApplicable)
 						{
+							if (isNotApplicable)
+							{
+								// El valor es la constante de control. No es un error, el dato está ausente.
+								if (isDryRun)
+								{
+									tagExecutionDetails[tag.Name] = (Constants.MetadataNotSetValue, "dim", "[dim](Not Applicable / Not Written)[/]");
+									templateCheckResults[tag.Name] = new TagValidationResult(false, string.Empty, tag.Required, true);
+								}
+								continue; // No hay valor real para escribir/comparar.
+							}
+
+							// Si es realmente null/empty (y no es la constante de control)
 							if (tag.Required)
 							{
 								templateError = true;
@@ -189,6 +210,9 @@ public class MetadataService : IMetadataService
 							continue;
 						}
 
+						// --- FIN: LÓGICA DE VALOR FALTANTE / SENTINELA ---
+
+						// Si llegamos aquí, resolvedValue es un valor real (no null/empty/sentinela).
 						if (isDryRun)
 							templateCheckResults[tag.Name] = new TagValidationResult(true, resolvedValue, tag.Required, true);
 
@@ -196,7 +220,29 @@ public class MetadataService : IMetadataService
 						// Lógica de Overwrite
 						string? existingVal = currentPhoto.ExifData?.Metadata.TryGetValue(tag.Name, out var val) == true ? val : null;
 						bool tagExistsInFile = existingVal != null;
-						bool shouldWrite = !tagExistsInFile || overwriteTags;
+						bool valuesAreSame = tagExistsInFile && existingVal!.Equals(resolvedValue, StringComparison.OrdinalIgnoreCase);
+
+						// --- INICIO: LÓGICA de shouldWrite ---
+						bool shouldWrite;
+
+						if (!tagExistsInFile)
+						{
+							shouldWrite = true; // Siempre escribimos tags nuevos.
+						}
+						else // Tag existe
+						{
+							if (overwriteTags)
+							{
+								// Escribir solo si hay una diferencia (Old -> New)
+								shouldWrite = !valuesAreSame;
+							}
+							else
+							{
+								// Si no hay overwrite, y el tag ya existe, NUNCA escribimos (Kept).
+								shouldWrite = false;
+							}
+						}
+						// --- FIN: LÓGICA de shouldWrite ---
 
 						if (shouldWrite)
 						{
@@ -207,23 +253,15 @@ public class MetadataService : IMetadataService
 								string statusColor;
 								string displayText;
 
-								if (tagExistsInFile && overwriteTags)
+								// Sobrescritura (Old -> New)
+								if (tagExistsInFile) // Llegamos aquí si overwriteTags es TRUE y !valuesAreSame
 								{
-									bool changed = !existingVal!.Equals(resolvedValue, StringComparison.OrdinalIgnoreCase);
-									overwriteDiffs[tag.Name] = (existingVal.EscapeMarkup(), resolvedValue.EscapeMarkup(), changed);
+									overwriteDiffs[tag.Name] = (existingVal!.EscapeMarkup(), resolvedValue.EscapeMarkup(), true);
 
-									if (changed)
-									{
-										displayText = $"[bold]{existingVal.EscapeMarkup()}[/] → [yellow]{resolvedValue.EscapeMarkup()}[/]";
-										statusColor = "yellow";
-									}
-									else
-									{
-										displayText = $"[dim]{resolvedValue.EscapeMarkup()}[/] (No Change)";
-										statusColor = "dim";
-									}
+									displayText = $"[bold]{existingVal.EscapeMarkup()}[/] → [yellow]{resolvedValue.EscapeMarkup()}[/]";
+									statusColor = "yellow";
 								}
-								else
+								else // Nuevo (New)
 								{
 									displayText = $"[cyan]{resolvedValue.EscapeMarkup()}[/] (New)";
 									statusColor = "cyan";
@@ -234,10 +272,23 @@ public class MetadataService : IMetadataService
 						}
 						else
 						{
+							// shouldWrite es FALSE (Tag existe y no hay que sobrescribir/no hay diferencia)
 							if (isDryRun)
 							{
-								string displayText = $"[dim]{existingVal!.EscapeMarkup()}[/] (Kept)";
-								tagExecutionDetails[tag.Name] = (existingVal, "dim", displayText);
+								string displayText;
+
+								if (tagExistsInFile && overwriteTags && valuesAreSame)
+								{
+									// Caso: Existe, Sobreescribir=TRUE, valores IGUALES (No Change)
+									displayText = $"[dim]{resolvedValue.EscapeMarkup()}[/] (No Change)";
+									overwriteDiffs[tag.Name] = (existingVal!.EscapeMarkup(), resolvedValue.EscapeMarkup(), false);
+								}
+								else // Caso: Tag existe, overwriteTags = FALSE (Kept)
+								{
+									displayText = $"[dim]{existingVal!.EscapeMarkup()}[/] (Kept)";
+								}
+
+								tagExecutionDetails[tag.Name] = (existingVal!, "dim", displayText);
 							}
 						}
 					}
@@ -248,7 +299,7 @@ public class MetadataService : IMetadataService
 					{
 						// 3. Ejecución Real y Refresco
 						writeSuccess = true;
-						readyToProcessCount++;
+						readyToProcessCount++; // Contador temporal para Dry Run
 
 						if (!isDryRun && tagsToWriteForPhoto.Any())
 						{
@@ -265,37 +316,93 @@ public class MetadataService : IMetadataService
 						}
 
 						// 4. VALIDACIÓN FINAL Y LOG (Unificado)
-						(templatePassed, templateCheckResults) = RevalidateTemplateTags(currentPhoto, templateTags);
 
-						RecalculateFinalTagExecutionDetails(currentPhoto, templateTags, templateCheckResults, tagExecutionDetails, overwriteDiffs, isDryRun);
-
-
-						if (!writeSuccess && !isDryRun)
+						// --------------------------------------------------------------------------
+						// INICIO: LÓGICA DE REVALIDACIÓN DRY RUN
+						// --------------------------------------------------------------------------
+						if (!isDryRun)
 						{
-							templatePassed = false;
-							failedByWriteError++;
-							readyToProcessCount--;
-							_statistics.InternalError++;
+							// En la ejecución REAL, revalidamos leyendo del archivo (o del objeto Photo actualizado)
+							(templatePassed, templateCheckResults) = RevalidateTemplateTags(currentPhoto, templateTags);
+
+							if (!writeSuccess && !isDryRun)
+							{
+								templatePassed = false;
+								failedByWriteError++;
+								readyToProcessCount--;
+							}
+							else if (!templatePassed)
+							{
+								failedByTemplateValidation++;
+							}
+						}
+						else // DRY RUN: Simulamos la validación final
+						{
+							// Si hubo un error en la primera pasada (ej. MISSING Required), ya templatePassed es false
+							if (!templatePassed)
+							{
+								failedByTemplateValidation++;
+							}
+
+							// Creación del templateCheckResults simulado (sin cambios)
+							foreach (var tag in templateTags)
+							{
+								if (tagExecutionDetails.TryGetValue(tag.Name, out var detail))
+								{
+									bool isMissingError = detail.DisplayText.Contains("MISSING") || detail.DisplayText.Contains("CONFIG ERROR");
+
+									templateCheckResults[tag.Name] = new TagValidationResult(
+										HasValue: !isMissingError,
+										Value: detail.Value,
+										IsRequired: tag.Required,
+										IsValid: !isMissingError);
+								}
+							}
+						}
+						// --------------------------------------------------------------------------
+						// FIN: LÓGICA DE REVALIDACIÓN DRY RUN
+						// --------------------------------------------------------------------------
+
+						RecalculateFinalTagExecutionDetails(currentPhoto, templateTags, templateCheckResults, tagExecutionDetails, overwriteDiffs, isDryRun, overwriteTags);
+
+						// --------------------------------------------------------------------------
+						// INICIO: DETERMINACIÓN DEL RUN STATUS (AÑADIDO)
+						// --------------------------------------------------------------------------
+						if (!writeSuccess)
+						{
+							runStatus = MetadataRunStatus.FailedWrite;
 						}
 						else if (!templatePassed)
 						{
-							if (writeSuccess || isDryRun)
+							runStatus = MetadataRunStatus.FailedTemplate;
+						}
+						else // Pasó todo: ReadyToWrite o Kept
+						{
+							bool hasChanges = tagsToWriteForPhoto.Any();
+							if (hasChanges || overwriteDiffs.Any(d => d.Value.Changed))
 							{
-								failedByTemplateValidation++;
-								if (!isDryRun) _statistics.InternalError++;
+								runStatus = MetadataRunStatus.ReadyToWrite;
+							}
+							else
+							{
+								runStatus = MetadataRunStatus.Kept;
 							}
 						}
+						// --------------------------------------------------------------------------
+						// FIN: DETERMINACIÓN DEL RUN STATUS
+						// --------------------------------------------------------------------------
+
 					}
-					else
+					else // !templatePassed (falló en la resolución inicial, ej. MISSING Required)
 					{
+						runStatus = MetadataRunStatus.FailedTemplate; // <--- ASIGNACIÓN DEL ESTADO DE FALLO
 						failedByTemplateValidation++;
-						if (!isDryRun) _statistics.InternalError++;
 					}
 				}
 				else
 				{
+					runStatus = MetadataRunStatus.SkippedIdentity; // <--- ASIGNACIÓN DEL ESTADO DE SALTO
 					skippedIdentityCount++;
-					if (!isDryRun) _statistics.InternalError++;
 				}
 
 				// 5. Almacenar resultados para el retorno
@@ -319,7 +426,8 @@ public class MetadataService : IMetadataService
 					templatePassed,
 					tagExecutionDetails,
 					overwriteDiffs,
-					validationResult
+					validationResult,
+					runStatus // <--- ¡NUEVO CAMPO!
 				));
 
 				finalValidationResults[fullPath] = validationResult;
@@ -352,7 +460,8 @@ public class MetadataService : IMetadataService
 			failedByTemplateValidation,
 			failedByWriteError,
 			allowUnknownIdentity,
-			isDryRun);
+			isDryRun,
+			viewTypes);
 
 		return validationResults;
 	}
@@ -768,80 +877,106 @@ public class MetadataService : IMetadataService
 
 
 	private void PrintAddPreviewTable(
-		IReadOnlyCollection<Photo> photos,
-		IReadOnlyCollection<TemplateTag> templateTags,
-		IReadOnlyCollection<AddPreviewResult> finalRunResults,
-		Dictionary<string, string> identityDetails,
-		string templateName,
-		bool overwriteTags,
-		int readyToProcessCount,
-		int skippedIdentityCount,
-		int failedByTemplateValidation,
-		int failedByWriteError,
-		bool allowUnknownIdentity,
-		bool isDryRun)
+	IReadOnlyCollection<Photo> photos,
+	IReadOnlyCollection<TemplateTag> templateTags,
+	IReadOnlyCollection<AddPreviewResult> finalRunResults,
+	Dictionary<string, string> identityDetails,
+	string templateName,
+	bool overwriteTags,
+	int readyToProcessCount, // Se ignora, se recalcula
+	int skippedIdentityCount, // Se ignora, se recalcula
+	int failedByTemplateValidation, // Se ignora, se recalcula
+	int failedByWriteError, // Se ignora, se recalcula
+	bool allowUnknownIdentity,
+	bool isDryRun,
+	IReadOnlyCollection<MetadataCheckViewType> viewTypes)
 	{
+		// --- Derivación de booleanos a partir de viewTypes ---
+		bool showIdentityColumn = viewTypes.Contains(MetadataCheckViewType.Identity) || viewTypes.Contains(MetadataCheckViewType.IdentityDetails);
+		bool showTemplateColumn = viewTypes.Contains(MetadataCheckViewType.Template) || viewTypes.Contains(MetadataCheckViewType.TemplateDetails);
+		bool showIdentityDetails = viewTypes.Contains(MetadataCheckViewType.IdentityDetails);
+		bool showTemplateDetails = viewTypes.Contains(MetadataCheckViewType.TemplateDetails);
+
+		// --- 1. CONSTRUCCIÓN CONDICIONAL DE COLUMNAS ---
 		var columns = new List<TableColumnConfig>
 		{
+			// Columna 1: File (Always visible)
 			new() { HeaderText = "File", Width = 40 },
-			new() { HeaderText = "Status", Width = 18, NoWrap = true },
-			new() { HeaderText = "Media Identity", Width = null },
-			new() { HeaderText = $"Proposed Tags (Template: {templateName})", Width = null }
+			// Columna 2: Status (Always visible)
+			new() { HeaderText = "Status", Width = 22, NoWrap = true }, // Aumentado el ancho para los nuevos estados
 		};
+
+		// Columna 3: Media Identity (Conditional)
+		if (showIdentityColumn)
+		{
+			columns.Add(new() { HeaderText = "Media Identity", Width = showIdentityDetails ? null : 40 });
+		}
+
+		// Columna 4: Proposed Tags (Conditional)
+		if (showTemplateColumn)
+		{
+			columns.Add(new() { HeaderText = $"Proposed Tags (Template: {templateName})", Width = null });
+		}
+
 
 		var rows = new List<List<string>>();
 
-		int keptUnchangedCount = 0;
-		int filesReadyToWrite = 0;
-		int failedByIdentity = 0;
+		// --- Contadores inicializados o re-calculados (RECALCULAMOS) ---
+		int keptUnchangedCountFinal = 0;
+		int writtenUpdatedCount = 0;
+		int failedByIdentityFinal = 0;
+		int failedByTemplateValidationFinal = 0;
+		int failedByWriteErrorFinal = 0;
 		int allowedUnknownWarnings = 0;
 		int missingTakenDate = 0;
 		int missingDevice = 0;
 		int missingAuthor = 0;
 		int missingMakeModel = 0;
-		int failedByTemplate = failedByTemplateValidation + failedByWriteError;
 
-
+		// --- Bucle de Procesamiento de Resultados ---
 		foreach (var result in finalRunResults)
 		{
 			var fullPath = result.FullPath;
 
 			string status;
-			if (result.IdentityPassed && result.TemplatePassed)
-			{
-				if (isDryRun)
-				{
-					status = "[bold green]✅ Ready[/]";
-				}
-				else
-				{
-					status = "[bold green]✔ SUCCESS[/]";
-				}
-				filesReadyToWrite++;
-			}
-			else
-			{
-				bool templateFailedForThisRow = !result.TemplatePassed;
 
-				if (!result.IdentityPassed) failedByIdentity++;
-
-				if (!result.IdentityPassed && templateFailedForThisRow)
-				{
-					status = isDryRun ? "[bold red]❌ Skip (Both)[/]" : "[bold red]✖ FAILED (Both)[/]";
-				}
-				else if (!result.IdentityPassed)
-				{
-					status = isDryRun ? "[bold red]❌ Skip (Identity)[/]" : "[bold red]✖ FAILED (Identity)[/]";
-				}
-				else
-				{
-					status = isDryRun ? "[bold red]❌ Skip (Template)[/]" : "[bold red]✖ FAILED (Write/Tpl)[/]";
-				}
+			// --------------------------------------------------------------------------
+			// NUEVA LÓGICA DE STATUS BASADA EN RUNSTATUS (CORRECCIÓN CLAVE)
+			// --------------------------------------------------------------------------
+			switch (result.RunStatus)
+			{
+				case MetadataRunStatus.ReadyToWrite:
+					status = isDryRun ? "[bold green]🟢 WRITE[/]" : "[bold green]✔ WRITE[/]";
+					writtenUpdatedCount++;
+					break;
+				case MetadataRunStatus.Kept:
+					status = isDryRun ? "[bold dim blue]🔵 KEPT[/]" : "[bold dim blue]✔ KEPT[/]";
+					keptUnchangedCountFinal++;
+					break;
+				case MetadataRunStatus.SkippedIdentity:
+					status = isDryRun ? "[bold red]❌ SKIP (Identity)[/]" : "[bold red]✖ FAILED (Identity)[/]";
+					failedByIdentityFinal++;
+					break;
+				case MetadataRunStatus.FailedTemplate:
+					status = isDryRun ? "[bold red]❌ SKIP (Template)[/]" : "[bold red]✖ FAILED (Template)[/]";
+					failedByTemplateValidationFinal++;
+					break;
+				case MetadataRunStatus.FailedWrite:
+					status = "[bold red]✖ FAILED (Write Error)[/]";
+					failedByWriteErrorFinal++;
+					break;
+				default:
+					status = "[bold red]??? ERROR[/]";
+					break;
 			}
+			// --------------------------------------------------------------------------
+			// FIN: NUEVA LÓGICA DE STATUS
+			// --------------------------------------------------------------------------
 
 			var identityTags = result.ValidationResult.IdentityTags;
 
-			if (!result.IdentityPassed)
+			// Lógica de conteo detallado de fallos (solo si se saltó por identidad)
+			if (result.RunStatus == MetadataRunStatus.SkippedIdentity)
 			{
 				if (identityTags.TryGetValue("TakenDate", out var takenDateTag) && !takenDateTag.IsValid)
 					missingTakenDate++;
@@ -857,7 +992,8 @@ public class MetadataService : IMetadataService
 						missingMakeModel++;
 				}
 			}
-			else if (result.IdentityPassed && allowUnknownIdentity)
+			// Lógica de Warnings (Solo si el archivo se va a procesar o mantener)
+			else if ((result.RunStatus == MetadataRunStatus.ReadyToWrite || result.RunStatus == MetadataRunStatus.Kept) && allowUnknownIdentity)
 			{
 				var identityLog = identityDetails[fullPath];
 				if (identityLog.Contains("[yellow]△[/]"))
@@ -866,49 +1002,73 @@ public class MetadataService : IMetadataService
 				}
 			}
 
-			if (result.IdentityPassed && result.TemplatePassed)
-			{
-				bool hasAnyChange = result.OverwriteDifferences.Any(d => d.Value.Changed) ||
-									result.TagsResults.Any(t => t.Value.StatusColor == "cyan" || t.Value.StatusColor == "green");
-
-				if (!hasAnyChange)
-				{
-					keptUnchangedCount++;
-				}
-			}
-
+			// Lógica de construcción de tagsBuilder (Solo se necesita si showTemplateDetails o showTemplateColumn es TRUE)
 			var tagsBuilder = new StringBuilder();
-			foreach (var tag in templateTags)
+			if (showTemplateColumn)
 			{
-				string line;
-				var reqStatus = tag.Required ? "[red]*[/]" : "[dim]*[/]";
-
-				if (result.TagsResults.TryGetValue(tag.Name, out var tagResult))
+				if (showTemplateDetails) // Mostrar detalles (línea por línea)
 				{
-					line = $"{reqStatus} [teal]{tag.Name.EscapeMarkup()}[/]: {tagResult.DisplayText}";
-				}
-				else if (tag.Required)
-				{
-					line = $"{reqStatus} [teal]{tag.Name.EscapeMarkup()}[/]: [bold white on red]MISSING CALCULATION[/]";
-				}
-				else continue;
+					foreach (var tag in templateTags)
+					{
+						string line;
+						var reqStatus = tag.Required ? "[red]*[/]" : "[dim]*[/]";
 
-				tagsBuilder.AppendLine(line);
+						if (result.TagsResults.TryGetValue(tag.Name, out var tagResult))
+						{
+							line = $"{reqStatus} [teal]{tag.Name.EscapeMarkup()}[/]: {tagResult.DisplayText}";
+						}
+						else if (tag.Required)
+						{
+							line = $"{reqStatus} [teal]{tag.Name.EscapeMarkup()}[/]: [bold white on red]MISSING CALCULATION[/]";
+						}
+						else continue;
+
+						tagsBuilder.AppendLine(line);
+					}
+				}
+				else // Mostrar resumen simple (Valid/Invalid)
+				{
+					tagsBuilder.Append(result.TemplatePassed ? "[green]Valid[/]" : "[red]Invalid[/]");
+				}
 			}
 
-
-			rows.Add(new List<string>
+			// --- 3. CONSTRUCCIÓN CONDICIONAL DE LA FILA (rows.Add) ---
+			var rowData = new List<string>
 			{
 				Markup.Escape(fullPath),
+				// [Columna 2: Status]
 				status,
-				identityDetails.ContainsKey(fullPath) ? identityDetails[fullPath] : "[bold red]IDENTITY ERROR[/]",
-				tagsBuilder.ToString()
-			});
+			};
+
+			// [Columna 3: Media Identity]
+			if (showIdentityColumn)
+			{
+				if (showIdentityDetails)
+				{
+					rowData.Add(identityDetails.ContainsKey(fullPath) ? identityDetails[fullPath] : "[bold red]IDENTITY ERROR[/]");
+				}
+				else
+				{
+					// Mostrar resumen simple (Valid/Invalid)
+					rowData.Add(result.IdentityPassed ? "[green]Valid[/]" : "[red]Invalid[/]");
+				}
+			}
+
+			// [Columna 4: Proposed Tags]
+			if (showTemplateColumn)
+			{
+				rowData.Add(tagsBuilder.ToString());
+			}
+
+			rows.Add(rowData);
 		}
 
-		readyToProcessCount = filesReadyToWrite - keptUnchangedCount;
+		// Recalculamos los contadores finales del resumen
+		var totalFiles = photos.Count;
+		var failedByTemplateFinal = failedByTemplateValidationFinal + failedByWriteErrorFinal;
+		var failedSkippedCount = failedByIdentityFinal + failedByTemplateFinal;
 
-
+		// --- Escritura de la Tabla y Título de Contexto ---
 		if (isDryRun)
 		{
 			_consoleWriter.WriteMarkup("\n[bold yellow]--- DRY RUN PREVIEW (No changes applied) ---[/]");
@@ -928,145 +1088,250 @@ public class MetadataService : IMetadataService
 
 
 		// -------------------------------------------------------------------------
-		// COMMAND RESULT
+		// SIMPLIFIED AND DIFFERENTIATED FINAL REPORT (COMMAND RESULT)
 		// -------------------------------------------------------------------------
-		var rule = new Rule("[bold]COMMAND RESULT[/]");
+
+		// --- 1. Final Counter Preparation
+		var ruleTitle = isDryRun ? "SIMULATION RESULT" : "EXECUTION RESULT";
+		var rule = new Rule($"[bold]{ruleTitle}[/]");
 		rule.Justification = Justify.Center;
 		rule.Style = new Style(foreground: Color.Yellow);
 		AnsiConsole.Write(rule);
 
-		var totalFiles = photos.Count;
-		var passedSimulated = readyToProcessCount;
-		var failedSimulated = skippedIdentityCount + failedByTemplate;
+		_consoleWriter.WriteMarkup($"[yellow]Total Files Processed:[/][bold] {totalFiles}[/]");
+		_consoleWriter.WriteMarkup(""); // New line
 
-		_consoleWriter.WriteMarkup($"[yellow]Total Files processed:[/] [bold]{totalFiles}[/]");
+		// --- 2. SUCCESSFUL OPERATIONS ---
+		_consoleWriter.WriteMarkup("[bold green]🟢 SUCCESSFUL OPERATIONS:[/]");
 
-		if (filesReadyToWrite == totalFiles && keptUnchangedCount == 0 && allowedUnknownWarnings == 0)
+		// Execution Counters
+		var writtenMessage = isDryRun
+			? "files (Metadata will be written / updated)"
+			: "files (Metadata successfully written)";
+
+		var keptMessage = isDryRun
+			? "files (Already had correct metadata and will be kept)"
+			: "files (Already had correct metadata)";
+
+		// Written/Updated (Éxito Activo - GREEN)
+		_consoleWriter.WriteMarkup($"[green]   • Written / Updated:      [/][green]{writtenUpdatedCount}[/] {writtenMessage}");
+
+		// Kept (Éxito Pasivo/Neutro - CYAN o DIM)
+		_consoleWriter.WriteMarkup($"[blue]   • Unchanged (Kept):       [/][blue]{keptUnchangedCountFinal}[/] {keptMessage}");
+		_consoleWriter.WriteMarkup(""); // New line
+
+
+		// --- 3. FAILURES (SKIPPED/ERROR) ---
+
+		if (failedSkippedCount > 0)
 		{
-			_consoleWriter.WriteMarkup($"[green]✅ All files {(isDryRun ? "ready for processing" : "processed successfully")}.[/]");
-		}
-		else
-		{
-			_consoleWriter.WriteMarkup($"[green]✅ Passed (Write/Update):[/] [bold]{passedSimulated}[/]");
-			_consoleWriter.WriteMarkup($"[red]🛑 Failed (Skipped):[/] [bold]{failedSimulated}[/]");
-		}
+			_consoleWriter.WriteMarkup("[bold red]🛑 FAILED OPERATIONS (SKIPPED/ERROR):[/]");
 
-		// -------------------------------------------------------------------------
-		// FAILURE BREAKDOWN
-		// -------------------------------------------------------------------------
-		if (failedByIdentity > 0 || failedByTemplate > 0)
-			_consoleWriter.WriteMarkup("\n[bold underline]Failure Breakdown:[/]");
+			// Identity Failures (Missing Critical Data)
+			if (failedByIdentityFinal > 0)
+			{
+				_consoleWriter.WriteMarkup($"   • [red]Identity Missing:[/][bold red] {failedByIdentityFinal}[/] files (Missing critical data like Date/Required Tags)");
+			}
 
-		if (failedByIdentity > 0)
-			_consoleWriter.WriteMarkup($"• [yellow]Required Data (Identity) Missing/Invalid:[/][bold red] {failedByIdentity}[/] files");
+			// Template Failures (Validation or Write Error)
+			if (failedByTemplateFinal > 0)
+			{
+				var errorType = isDryRun ? "Failed by Template Validation" : "Failed by Validation / Write Error";
+				_consoleWriter.WriteMarkup($"   • [red]Template / Write Error:[/][bold red] {failedByTemplateFinal}[/] files ({errorType})");
+			}
+			_consoleWriter.WriteMarkup(""); // New line
 
-		if (failedByTemplate > 0)
-		{
-			var failureType = isDryRun ? "Missing" : "Missing / Write Error";
-			_consoleWriter.WriteMarkup($"• [yellow]Required Tags (Template) {failureType}:[/][bold red] {failedByTemplate}[/] files");
-		}
+			// Failure Details (Template / Write)
+			if (failedByTemplateValidationFinal > 0 || failedByWriteErrorFinal > 0)
+			{
+				_consoleWriter.WriteMarkup("[bold underline]Template / Write Failure Details:[/]");
+				if (failedByTemplateValidationFinal > 0)
+					_consoleWriter.WriteMarkup($"  - Validation Failed (Missing Tags/Calc Error): [red]{failedByTemplateValidationFinal}[/]");
+				if (failedByWriteErrorFinal > 0)
+					_consoleWriter.WriteMarkup($"  - Write Operation Failed (I/O Error): [red]{failedByWriteErrorFinal}[/]");
+			}
 
-		// -------------------------------------------------------------------------
-		// TEMPLATE / WRITE FAILURE DETAILS
-		// -------------------------------------------------------------------------
-		if (failedByTemplateValidation > 0 || failedByWriteError > 0)
-		{
-			_consoleWriter.WriteMarkup("\n[bold underline]Template / Write Failure Details:[/]");
-			if (failedByTemplateValidation > 0)
-				_consoleWriter.WriteMarkup($"  - Validation Failed (Missing Tags/Calc Error): [red]{failedByTemplateValidation}[/]");
-
-			if (failedByWriteError > 0)
-				_consoleWriter.WriteMarkup($"  - Write Operation Failed (I/O Error): [red]{failedByWriteError}[/]");
-		}
-
-		// -------------------------------------------------------------------------
-		// MISSING IDENTITY DATA DETAILS
-		// -------------------------------------------------------------------------
-		if (failedByIdentity > 0)
-		{
-			_consoleWriter.WriteMarkup("\n[bold underline]Missing Identity Data Details:[/]");
-			if (missingTakenDate > 0) _consoleWriter.WriteMarkup($"  - Missing Taken Date: [red]{missingTakenDate}[/]");
-			if (missingMakeModel > 0) _consoleWriter.WriteMarkup($"  - Missing Make/Model: [red]{missingMakeModel}[/]");
-			if (missingDevice > 0) _consoleWriter.WriteMarkup($"  - Missing Device ID:  [red]{missingDevice}[/]");
-			if (missingAuthor > 0) _consoleWriter.WriteMarkup($"  - Missing Author ID:  [red]{missingAuthor}[/]");
+			// Failure Details (Identity)
+			if (failedByIdentityFinal > 0)
+			{
+				_consoleWriter.WriteMarkup("[bold underline]Missing Identity Data Details:[/]");
+				if (missingTakenDate > 0) _consoleWriter.WriteMarkup($"  - Missing Taken Date: [red]{missingTakenDate}[/]");
+				if (missingMakeModel > 0) _consoleWriter.WriteMarkup($"  - Missing Make/Model: [red]{missingMakeModel}[/]");
+				if (missingDevice > 0) _consoleWriter.WriteMarkup($"  - Missing Device ID:  [red]{missingDevice}[/]");
+				if (missingAuthor > 0) _consoleWriter.WriteMarkup($"  - Missing Author ID:  [red]{missingAuthor}[/]");
+			}
+			_consoleWriter.WriteMarkup(""); // New line
 		}
 
-		// -------------------------------------------------------------------------
-		// IDENTITY WARNINGS (ALLOW UNKNOWN)
-		// -------------------------------------------------------------------------
+
+		// --- 4. WARNINGS ---
+
 		if (allowedUnknownWarnings > 0)
 		{
-			_consoleWriter.WriteMarkup("\n[bold underline]Identity Warnings (Allow Unknown):[/]");
-			_consoleWriter.WriteMarkup($"• [yellow]Files accepted with missing/unknown identity:[/][bold] {allowedUnknownWarnings}[/] files");
-			_consoleWriter.WriteMarkup("  [dim](These files were allowed to pass Identity Check due to the allow-unknown-identity flag)[/]");
-		}
+			_consoleWriter.WriteMarkup("[bold yellow]⚠️ WARNINGS (PROCESSED WITH WARNINGS):[/]");
 
-		// -------------------------------------------------------------------------
-		// KEPT/UNCHANGED INFO
-		// -------------------------------------------------------------------------
-		if (keptUnchangedCount > 0)
-		{
-			_consoleWriter.WriteMarkup("\n[bold underline]Kept Information:[/]");
-			_consoleWriter.WriteMarkup($"• [yellow]No changes detected (Kept):[/] {keptUnchangedCount} files");
+			var unknownUsedMessage = isDryRun
+				? "files (The 'Unknown' value will be used for Author/Device)"
+				: "files (The 'Unknown' value was used for Author/Device)";
+
+			_consoleWriter.WriteMarkup($"   • Unknown Identity Used: [yellow]{allowedUnknownWarnings}[/] {unknownUsedMessage}");
+			_consoleWriter.WriteMarkup("  [dim](Files allowed due to the --allow-unknown-identity flag)[/]");
+			_consoleWriter.WriteMarkup(""); // New line
 		}
 
 
-		_consoleWriter.WriteMarkup("\n[yellow]Review the table above for specific file details.[/]");
+		// --- 5. END OF REPORT ---
+		_consoleWriter.WriteMarkup("[yellow]Review the table above for specific file details.[/]");
+
+		// Final rule to close the report
+		var finalRule = new Rule("");
+		finalRule.Style = new Style(foreground: Color.Yellow);
+		AnsiConsole.Write(finalRule);
 	}
 
 
 	private void RecalculateFinalTagExecutionDetails(
-		Photo photo,
-		IReadOnlyCollection<TemplateTag> templateTags,
-		Dictionary<string, TagValidationResult> templateCheckResults,
-		Dictionary<string, (string Value, string StatusColor, string DisplayText)> tagExecutionDetails,
-		Dictionary<string, (string OriginalValue, string NewValue, bool Changed)> overwriteDiffs,
-		bool isDryRun)
+	Photo photo,
+	IReadOnlyCollection<TemplateTag> templateTags,
+	Dictionary<string, TagValidationResult> templateCheckResults,
+	Dictionary<string, (string Value, string StatusColor, string DisplayText)> tagExecutionDetails,
+	Dictionary<string, (string OriginalValue, string NewValue, bool Changed)> overwriteDiffs,
+	bool isDryRun,
+	bool overwriteTagsFlag)
 	{
 		foreach (var tag in templateTags)
 		{
 			if (!templateCheckResults.TryGetValue(tag.Name, out var check))
 				continue;
 
-			if (tagExecutionDetails.TryGetValue(tag.Name, out var existingResult) && existingResult.DisplayText.Contains("(Kept)"))
+			tagExecutionDetails.TryGetValue(tag.Name, out var existingResult);
+
+			string finalValueDisplay = check.Value.EscapeMarkup();
+			string valueColor;
+			string labelColor;
+			string statusLabel;
+
+			// ---------------------------------------------------------
+			// CASO 1: Kept / Skipped (Prioridad Alta)
+			// ---------------------------------------------------------
+
+			// A. Respetar Kept (Coincidencia Perfecta o Protección).
+			if (existingResult.DisplayText?.Contains("(Kept)") == true || existingResult.DisplayText?.Contains("(Match)") == true)
 			{
+				// AJUSTE: El valor es tenue, pero la acción de 'Kept' es afirmada en verde
+				valueColor = "dim";
+				labelColor = "green";
+				statusLabel = "(Match / Kept)";
+
+				tagExecutionDetails[tag.Name] = (
+					check.Value,
+					valueColor,
+					$"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]"
+				);
 				continue;
 			}
 
-			string tagValueDisplay = check.Value.EscapeMarkup();
-			string statusColor;
-			string displayText;
-
-			if (check.IsValid)
+			// B. Respetar Empty / Not Applicable.
+			if (existingResult.DisplayText?.Contains("(Empty)") == true ||
+				existingResult.DisplayText?.Contains("(Not Applicable / Not Written)") == true)
 			{
-				if (overwriteDiffs.TryGetValue(tag.Name, out var diff))
+				valueColor = "dim";
+				labelColor = "dim";
+				statusLabel = "(Empty / Skipped)";
+
+				// Como el valor es vacío, solo mostramos la etiqueta
+				tagExecutionDetails[tag.Name] = (
+					check.Value,
+					valueColor,
+					$"[{labelColor}]{statusLabel}[/]"
+				);
+				continue;
+			}
+
+			// ---------------------------------------------------------
+			// CASO 2: Error / Missing (IsValid = false)
+			// ---------------------------------------------------------
+			if (!check.IsValid)
+			{
+				valueColor = "red";
+				statusLabel = isDryRun ? "MISSING / Required" : "FAILED: Missing After Write";
+
+				string errorDisplay = isDryRun
+					? $"[bold white on red]{statusLabel}[/]"
+					: $"[bold red]✖ {statusLabel}[/]";
+
+				tagExecutionDetails[tag.Name] = (check.Value, valueColor, errorDisplay);
+				continue;
+			}
+
+			// ---------------------------------------------------------
+			// CASO 3: Diferencias y Overwrite
+			// ---------------------------------------------------------
+			if (overwriteDiffs.TryGetValue(tag.Name, out var diff))
+			{
+				// A. Tienen valores diferentes
+				if (diff.Changed)
 				{
-					if (diff.Changed)
+					if (overwriteTagsFlag)
 					{
-						statusColor = "yellow";
-						displayText = $"[bold]{diff.OriginalValue}[/] → [yellow]{tagValueDisplay}[/]";
+						// CASO: Diferente + Overwrite activado -> Se escribirá
+						valueColor = "dim"; // El valor original que se va (en dim)
+						labelColor = isDryRun ? "magenta" : "green"; // La acción
+						statusLabel = isDryRun ? "(Differs / Overwrite)" : "(Updated)";
+
+						// Mostramos: "ValorViejo -> ValorNuevo (Estado)"
+						string diffText = $"[{valueColor}]{diff.OriginalValue}[/] → [{labelColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]";
+						tagExecutionDetails[tag.Name] = (check.Value, labelColor, diffText);
 					}
 					else
 					{
-						statusColor = "dim";
-						displayText = $"[dim]{tagValueDisplay}[/] (No Change)";
+						// CASO: Diferente + Overwrite apagado -> Se protege el original
+						valueColor = "yellow"; // El valor original protegido (llama la atención)
+						labelColor = "red"; // AJUSTE: La etiqueta es roja para el conflicto
+						statusLabel = "(Differs / Kept)";
+
+						// Mostramos: "ValorViejo (Template: ValorNuevo) (Estado)"
+						string diffText = $"[{valueColor}]{diff.OriginalValue}[/] [dim](Target: {finalValueDisplay})[/] [{labelColor}]{statusLabel}[/]";
+						tagExecutionDetails[tag.Name] = (check.Value, valueColor, diffText);
 					}
 				}
+				// B. Tienen el mismo valor (Coinciden) - Caso redundante, usa el formato de A.
 				else
 				{
-					statusColor = isDryRun ? "cyan" : "green";
-					displayText = $"[{(isDryRun ? "cyan" : "green")}]{tagValueDisplay}[/] (New/Verified)";
+					// AJUSTE: Formato de Match/Kept
+					valueColor = "dim";
+					labelColor = "green";
+					statusLabel = "(Match / Kept)";
+					tagExecutionDetails[tag.Name] = (check.Value, valueColor, $"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]");
 				}
+				continue;
+			}
+
+			// ---------------------------------------------------------
+			// CASO 4: Nuevo (Valor previo era null/vacio)
+			// ---------------------------------------------------------
+
+			if (isDryRun)
+			{
+				// CONFIGURACIÓN DRY RUN
+				valueColor = "cyan";    // El valor: Unknown (Llama la atención)
+				labelColor = "yellow";     // AJUSTE: La acción: (New / To Write) (Aviso)
+				statusLabel = "(New / To Write)";
 			}
 			else
 			{
-				statusColor = "red";
-				displayText = isDryRun
-					? "[bold white on red]MISSING/ERROR (DryRun)[/]"
-					: "[bold red]✖ FAILED: Missing After Write[/]";
+				// CONFIGURACIÓN REAL RUN (Todo verde indica éxito)
+				valueColor = "green";
+				labelColor = "green";
+				statusLabel = "(Written)";
 			}
 
-			tagExecutionDetails[tag.Name] = (check.Value, statusColor, displayText);
+			// Construimos el string con los dos colores diferenciados
+			tagExecutionDetails[tag.Name] = (
+				check.Value,
+				valueColor,
+				$"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]"
+			);
 		}
 	}
 

@@ -18,6 +18,7 @@ public interface IMetadataService
 	IReadOnlyDictionary<string, FileValidationResult> AddMetadataFromTemplate( // <-- ¡ESTE ES EL CAMBIO CLAVE!
 		IReadOnlyCollection<Photo> photos,
 		string templateName,
+		IReadOnlyCollection<MetadataCheckViewType> metadataViewTypes,
 		bool isDryRun = false,
 		bool overwriteTags = false,
 		bool allowUnknownIdentity = false);
