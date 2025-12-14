@@ -273,22 +273,25 @@ public class MetadataService : IMetadataService
 						else
 						{
 							// shouldWrite es FALSE (Tag existe y no hay que sobrescribir/no hay diferencia)
-							if (isDryRun)
+							if (isDryRun && tagExistsInFile)
 							{
-								string displayText;
+								// ***************************************************************
+								// INICIO: CORRECCIÓN CLAVE PARA DETECCIÓN DE CONFLICTO (DIFFERS / KEPT)
+								// ***************************************************************
+								// Determinar si hay alguna diferencia real.
+								bool hasDiff = !valuesAreSame;
 
-								if (tagExistsInFile && overwriteTags && valuesAreSame)
-								{
-									// Caso: Existe, Sobreescribir=TRUE, valores IGUALES (No Change)
-									displayText = $"[dim]{resolvedValue.EscapeMarkup()}[/] (No Change)";
-									overwriteDiffs[tag.Name] = (existingVal!.EscapeMarkup(), resolvedValue.EscapeMarkup(), false);
-								}
-								else // Caso: Tag existe, overwriteTags = FALSE (Kept)
-								{
-									displayText = $"[dim]{existingVal!.EscapeMarkup()}[/] (Kept)";
-								}
+								// Llenamos overwriteDiffs. Esto es CRUCIAL para que RecalculateFinalTagExecutionDetails
+								// pueda entrar en el CASO 3 (Diferencias) y aplicar el estado (Differs / Kept) o (Match / Kept).
+								overwriteDiffs[tag.Name] = (existingVal!.EscapeMarkup(), resolvedValue.EscapeMarkup(), hasDiff);
 
-								tagExecutionDetails[tag.Name] = (existingVal!, "dim", displayText);
+								// Proporcionamos un placeholder de log temporal para evitar errores en RecalculateFinalTagExecutionDetails
+								// (que se sobrescribirá inmediatamente después con el display correcto)
+								string logPlaceholder = hasDiff ? "(Conflict Kept)" : "(Match)";
+								tagExecutionDetails[tag.Name] = (existingVal!, "dim", logPlaceholder);
+								// ***************************************************************
+								// FIN: CORRECCIÓN CLAVE
+								// ***************************************************************
 							}
 						}
 					}
@@ -379,7 +382,10 @@ public class MetadataService : IMetadataService
 						else // Pasó todo: ReadyToWrite o Kept
 						{
 							bool hasChanges = tagsToWriteForPhoto.Any();
-							if (hasChanges || overwriteDiffs.Any(d => d.Value.Changed))
+							// También comprobamos si había diferencias que se sobrescribieron
+							bool hadOverwriteDiffs = overwriteDiffs.Any(d => d.Value.Changed && overwriteTags);
+
+							if (hasChanges || hadOverwriteDiffs)
 							{
 								runStatus = MetadataRunStatus.ReadyToWrite;
 							}
@@ -899,12 +905,12 @@ public class MetadataService : IMetadataService
 
 		// --- 1. CONSTRUCCIÓN CONDICIONAL DE COLUMNAS ---
 		var columns = new List<TableColumnConfig>
-		{
-			// Columna 1: File (Always visible)
-			new() { HeaderText = "File", Width = 40 },
-			// Columna 2: Status (Always visible)
-			new() { HeaderText = "Status", Width = 22, NoWrap = true }, // Aumentado el ancho para los nuevos estados
-		};
+	{
+		// Columna 1: File (Always visible)
+		new() { HeaderText = "File", Width = 40 },
+		// Columna 2: Status (Always visible)
+		new() { HeaderText = "Status", Width = 22, NoWrap = true }, // Aumentado el ancho para los nuevos estados
+	};
 
 		// Columna 3: Media Identity (Conditional)
 		if (showIdentityColumn)
@@ -928,6 +934,7 @@ public class MetadataService : IMetadataService
 		int failedByTemplateValidationFinal = 0;
 		int failedByWriteErrorFinal = 0;
 		int allowedUnknownWarnings = 0;
+		int totalTagDifferencesFound = 0; // <--- ¡NUEVO CONTADOR!
 		int missingTakenDate = 0;
 		int missingDevice = 0;
 		int missingAuthor = 0;
@@ -972,6 +979,16 @@ public class MetadataService : IMetadataService
 			// --------------------------------------------------------------------------
 			// FIN: NUEVA LÓGICA DE STATUS
 			// --------------------------------------------------------------------------
+
+			// --------------------------------------------------------------------------
+			// Lógica de conteo de Diferencias de Tags
+			// Solo contamos si hubo un cambio real entre Original y New.
+			// Esto cubre tanto los tags que se sobrescriben como los que se mantienen.
+			// --------------------------------------------------------------------------
+			if (result.OverwriteDifferences.Any())
+			{
+				totalTagDifferencesFound += result.OverwriteDifferences.Count(d => d.Value.Changed);
+			}
 
 			var identityTags = result.ValidationResult.IdentityTags;
 
@@ -1034,11 +1051,11 @@ public class MetadataService : IMetadataService
 
 			// --- 3. CONSTRUCCIÓN CONDICIONAL DE LA FILA (rows.Add) ---
 			var rowData = new List<string>
-			{
-				Markup.Escape(fullPath),
-				// [Columna 2: Status]
-				status,
-			};
+		{
+			Markup.Escape(fullPath),
+			// [Columna 2: Status]
+			status,
+		};
 
 			// [Columna 3: Media Identity]
 			if (showIdentityColumn)
@@ -1165,17 +1182,35 @@ public class MetadataService : IMetadataService
 
 
 		// --- 4. WARNINGS ---
+		bool hasWarnings = allowedUnknownWarnings > 0 || totalTagDifferencesFound > 0;
 
-		if (allowedUnknownWarnings > 0)
+		if (hasWarnings)
 		{
-			_consoleWriter.WriteMarkup("[bold yellow]⚠️ WARNINGS (PROCESSED WITH WARNINGS):[/]");
+			// Título de la sección
+			_consoleWriter.WriteMarkup("[bold yellow]⚠️ WARNINGS (PROCESSED WITH ATTENTION):[/]");
 
-			var unknownUsedMessage = isDryRun
-				? "files (The 'Unknown' value will be used for Author/Device)"
-				: "files (The 'Unknown' value was used for Author/Device)";
 
-			_consoleWriter.WriteMarkup($"   • Unknown Identity Used: [yellow]{allowedUnknownWarnings}[/] {unknownUsedMessage}");
-			_consoleWriter.WriteMarkup("  [dim](Files allowed due to the --allow-unknown-identity flag)[/]");
+			if (totalTagDifferencesFound > 0)
+			{
+				string actionMessage = overwriteTags
+					? $"value conflicts [dim](Overwritten)[/]"
+					: $"value conflicts [dim](Protected / Kept)[/]";
+
+				// El texto ahora es "Tag Value Differences Found"
+				_consoleWriter.WriteMarkup($"   • [red]Tag value differences found:[/][bold red] {totalTagDifferencesFound}[/] tags with {actionMessage}.");
+				_consoleWriter.WriteMarkup($"  [dim](Review the table for tags with 'Overwrite' or 'Differs / Kept' statuses)[/]");
+			}
+			// -------------------------------------------------------------
+
+			if (allowedUnknownWarnings > 0)
+			{
+				var unknownUsedMessage = isDryRun
+					? "files (The 'Unknown' value will be used for Author/Device)"
+					: "files (The 'Unknown' value was used for Author/Device)";
+
+				_consoleWriter.WriteMarkup($"   • Unknown Identity used: [yellow]{allowedUnknownWarnings}[/] {unknownUsedMessage}");
+				_consoleWriter.WriteMarkup("  [dim](Files allowed due to the --allow-unknown-identity flag)[/]");
+			}
 			_consoleWriter.WriteMarkup(""); // New line
 		}
 
@@ -1288,6 +1323,7 @@ public class MetadataService : IMetadataService
 						statusLabel = isDryRun ? "(Differs / Overwrite)" : "(Updated)";
 
 						// Mostramos: "ValorViejo -> ValorNuevo (Estado)"
+						// Usamos finalValueDisplay (que debería ser el valor de la plantilla)
 						string diffText = $"[{valueColor}]{diff.OriginalValue}[/] → [{labelColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]";
 						tagExecutionDetails[tag.Name] = (check.Value, labelColor, diffText);
 					}
@@ -1298,18 +1334,21 @@ public class MetadataService : IMetadataService
 						labelColor = "red"; // AJUSTE: La etiqueta es roja para el conflicto
 						statusLabel = "(Differs / Kept)";
 
-						// Mostramos: "ValorViejo (Template: ValorNuevo) (Estado)"
-						string diffText = $"[{valueColor}]{diff.OriginalValue}[/] [dim](Target: {finalValueDisplay})[/] [{labelColor}]{statusLabel}[/]";
+						string targetValueDisplay = diff.NewValue;
+
+						// Mostramos: "ValorViejo (Target: ValorNuevo) (Estado)"
+						string diffText = $"[{valueColor}]{diff.OriginalValue}[/] [dim](Target: {targetValueDisplay})[/] [{labelColor}]{statusLabel}[/]";
 						tagExecutionDetails[tag.Name] = (check.Value, valueColor, diffText);
 					}
 				}
-				// B. Tienen el mismo valor (Coinciden) - Caso redundante, usa el formato de A.
+				// B. Tienen el mismo valor (Coinciden)
 				else
 				{
 					// AJUSTE: Formato de Match/Kept
 					valueColor = "dim";
 					labelColor = "green";
 					statusLabel = "(Match / Kept)";
+					// Usamos el valor existente (finalValueDisplay) ya que es igual al valor de la plantilla
 					tagExecutionDetails[tag.Name] = (check.Value, valueColor, $"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]");
 				}
 				continue;
