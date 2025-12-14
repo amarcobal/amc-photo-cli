@@ -670,7 +670,7 @@ public class MetadataService : IMetadataService
 					value = ResolveTagValue(photo, tag, isDryRun: true, templateTags);
 
 					bool isConfigError = value == "CONFIG_ERROR";
-					bool isMissingOrEmpty = string.IsNullOrWhiteSpace(value) || value == new SubSeconds("0").Padded();
+					bool isMissingOrEmpty = string.IsNullOrWhiteSpace(value);
 
 					hasValue = !isConfigError && !isMissingOrEmpty;
 
@@ -1199,6 +1199,10 @@ public class MetadataService : IMetadataService
 	bool isDryRun,
 	bool overwriteTagsFlag)
 	{
+		// Usamos una constante ficticia para representar el valor [NOT_SET]
+		// En tu código real, esto sería 'PhotoCli.Core.Constants.MetadataNotSetValue' o similar.
+		const string MetadataNotSetValue = "[NOT_SET]";
+
 		foreach (var tag in templateTags)
 		{
 			if (!templateCheckResults.TryGetValue(tag.Name, out var check))
@@ -1232,8 +1236,12 @@ public class MetadataService : IMetadataService
 			}
 
 			// B. Respetar Empty / Not Applicable.
-			if (existingResult.DisplayText?.Contains("(Empty)") == true ||
-				existingResult.DisplayText?.Contains("(Not Applicable / Not Written)") == true)
+			// ************************************************************
+			// CORRECCIÓN CLAVE: Excluimos el valor [NOT_SET] intencional
+			// ************************************************************
+			if (check.Value != MetadataNotSetValue && // <--- EXCLUSIÓN DEL VALOR INTENCIONAL
+				(existingResult.DisplayText?.Contains("(Empty)") == true ||
+				 existingResult.DisplayText?.Contains("(Not Applicable / Not Written)") == true))
 			{
 				valueColor = "dim";
 				labelColor = "dim";
@@ -1311,27 +1319,48 @@ public class MetadataService : IMetadataService
 			// CASO 4: Nuevo (Valor previo era null/vacio)
 			// ---------------------------------------------------------
 
-			if (isDryRun)
+			// ************************************************************
+			// AJUSTE: Manejo de Placeholder [NOT_SET]
+			// ************************************************************
+			if (check.Value == MetadataNotSetValue)
 			{
-				// CONFIGURACIÓN DRY RUN
-				valueColor = "cyan";    // El valor: Unknown (Llama la atención)
-				labelColor = "yellow";     // AJUSTE: La acción: (New / To Write) (Aviso)
-				statusLabel = "(New / To Write)";
+				// Este es un valor intencional para tags requeridos que estaban vacíos.
+				valueColor = "dim"; // El valor es [NOT_SET]
+				labelColor = "yellow";
+				statusLabel = isDryRun ? "(New Placeholder)" : "(Written Placeholder)";
+
+				// Construimos la salida: [NOT_SET] (New Placeholder)
+				tagExecutionDetails[tag.Name] = (
+					check.Value,
+					valueColor,
+					$"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]"
+				);
 			}
 			else
 			{
-				// CONFIGURACIÓN REAL RUN (Todo verde indica éxito)
-				valueColor = "green";
-				labelColor = "green";
-				statusLabel = "(Written)";
-			}
+				// Este es un valor nuevo REAL (no un placeholder)
+				if (isDryRun)
+				{
+					// CONFIGURACIÓN DRY RUN
+					valueColor = "cyan";    // El valor: Unknown (Llama la atención)
+					labelColor = "yellow";     // AJUSTE: La acción: (New / To Write) (Aviso)
+					statusLabel = "(New / To Write)";
+				}
+				else
+				{
+					// CONFIGURACIÓN REAL RUN (Todo verde indica éxito)
+					valueColor = "green";
+					labelColor = "green";
+					statusLabel = "(Written)";
+				}
 
-			// Construimos el string con los dos colores diferenciados
-			tagExecutionDetails[tag.Name] = (
-				check.Value,
-				valueColor,
-				$"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]"
-			);
+				// Construimos el string con los dos colores diferenciados
+				tagExecutionDetails[tag.Name] = (
+					check.Value,
+					valueColor,
+					$"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]"
+				);
+			}
 		}
 	}
 
