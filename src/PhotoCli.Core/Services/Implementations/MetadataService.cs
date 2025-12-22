@@ -366,7 +366,7 @@ public class MetadataService : IMetadataService
 						// FIN: LÓGICA DE REVALIDACIÓN DRY RUN
 						// --------------------------------------------------------------------------
 
-						RecalculateFinalTagExecutionDetails(currentPhoto, templateTags, templateCheckResults, tagExecutionDetails, overwriteDiffs, isDryRun, overwriteTags);
+						RecalculateFinalTagExecutionDetails(currentPhoto, templateTags, templateCheckResults, tagExecutionDetails, overwriteDiffs, isDryRun, overwriteTags, runStatus);
 
 						// --------------------------------------------------------------------------
 						// INICIO: DETERMINACIÓN DEL RUN STATUS (AÑADIDO)
@@ -1232,49 +1232,85 @@ public class MetadataService : IMetadataService
 	Dictionary<string, (string Value, string StatusColor, string DisplayText)> tagExecutionDetails,
 	Dictionary<string, (string OriginalValue, string NewValue, bool Changed)> overwriteDiffs,
 	bool isDryRun,
-	bool overwriteTagsFlag)
+	bool overwriteTagsFlag,
+	MetadataRunStatus runStatus)
 	{
-		// Usamos una constante ficticia para representar el valor [NOT_SET]
-		// En tu código real, esto sería 'PhotoCli.Core.Constants.MetadataNotSetValue' o similar.
-		const string MetadataNotSetValue = "[NOT_SET]";
+		// ELIMINADO: const string MetadataNotSetValue = "[NOT_SET]";
+		// Se asume que Constants.MetadataNotSetValue es accesible aquí.
+
+		string valueColor;
+		string labelColor;
+		string statusLabel;
+
+		// ************************************************************
+		// CORRECCIÓN 3: PRIORIDAD DE ESTADO KEPT O SKIPPED
+		// ************************************************************
+		if (runStatus == MetadataRunStatus.Kept || runStatus == MetadataRunStatus.SkippedIdentity)
+		{
+			valueColor = "dim blue";
+			labelColor = "dim blue";
+			statusLabel = runStatus == MetadataRunStatus.Kept ? "(Match / Kept)" : "(Skipped / Identity)";
+
+			foreach (var tag in templateTags)
+			{
+				if (templateCheckResults.TryGetValue(tag.Name, out var check))
+				{
+					string finalValueDisplay = check.Value.EscapeMarkup();
+
+					// Corrección del error 'existingResult'
+					(string Value, string StatusColor, string DisplayText) currentDisplay;
+
+					if (tagExecutionDetails.TryGetValue(tag.Name, out currentDisplay) && !string.IsNullOrWhiteSpace(currentDisplay.Value))
+					{
+						finalValueDisplay = currentDisplay.Value.EscapeMarkup();
+					}
+
+
+					if (string.IsNullOrWhiteSpace(finalValueDisplay) || finalValueDisplay == Constants.MetadataNotSetValue.EscapeMarkup())
+					{
+						// Si el valor es vacío o [NOT_SET], solo mostramos la etiqueta de estado.
+						tagExecutionDetails[tag.Name] = (check.Value, labelColor, $"[{labelColor}]{statusLabel}[/]");
+					}
+					else
+					{
+						// Si hay un valor, lo mostramos tenue + la etiqueta de estado.
+						tagExecutionDetails[tag.Name] = (check.Value, valueColor, $"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]");
+					}
+				}
+				// Bloque para tags que están solo en tagExecutionDetails (ej. Tags de Identidad internos)
+				else if (tagExecutionDetails.TryGetValue(tag.Name, out var existingResult))
+				{
+					tagExecutionDetails[tag.Name] = (existingResult.Value, valueColor, $"[{valueColor}]{existingResult.Value.EscapeMarkup()}[/] [{labelColor}]{statusLabel}[/]");
+				}
+			}
+			return; // Salimos de la función.
+		}
+		// ************************************************************
+
+		// ---------------------------------------------------------------------
+		// LÓGICA DE ESCRITURA/FALLO
+		// ---------------------------------------------------------------------
 
 		foreach (var tag in templateTags)
 		{
 			if (!templateCheckResults.TryGetValue(tag.Name, out var check))
 				continue;
 
-			tagExecutionDetails.TryGetValue(tag.Name, out var existingResult);
+			// Inicialización necesaria para el resto de la lógica.
+			(string Value, string StatusColor, string DisplayText) existingResult = default;
+			tagExecutionDetails.TryGetValue(tag.Name, out existingResult);
 
 			string finalValueDisplay = check.Value.EscapeMarkup();
-			string valueColor;
-			string labelColor;
-			string statusLabel;
 
 			// ---------------------------------------------------------
-			// CASO 1: Kept / Skipped (Prioridad Alta)
+			// CASO 1: Kept / Skipped (Prioridad Baja - Solo para lógica de 'Empty')
 			// ---------------------------------------------------------
-
-			// A. Respetar Kept (Coincidencia Perfecta o Protección).
-			if (existingResult.DisplayText?.Contains("(Kept)") == true || existingResult.DisplayText?.Contains("(Match)") == true)
-			{
-				// AJUSTE: El valor es tenue, pero la acción de 'Kept' es afirmada en verde
-				valueColor = "dim";
-				labelColor = "green";
-				statusLabel = "(Match / Kept)";
-
-				tagExecutionDetails[tag.Name] = (
-					check.Value,
-					valueColor,
-					$"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]"
-				);
-				continue;
-			}
 
 			// B. Respetar Empty / Not Applicable.
 			// ************************************************************
-			// CORRECCIÓN CLAVE: Excluimos el valor [NOT_SET] intencional
+			// CORRECCIÓN 2: Excluimos el valor [NOT_SET] intencional
 			// ************************************************************
-			if (check.Value != MetadataNotSetValue && // <--- EXCLUSIÓN DEL VALOR INTENCIONAL
+			if (check.Value != Constants.MetadataNotSetValue && // <--- USO DE CONSTANTE REAL
 				(existingResult.DisplayText?.Contains("(Empty)") == true ||
 				 existingResult.DisplayText?.Contains("(Not Applicable / Not Written)") == true))
 			{
@@ -1318,20 +1354,19 @@ public class MetadataService : IMetadataService
 					if (overwriteTagsFlag)
 					{
 						// CASO: Diferente + Overwrite activado -> Se escribirá
-						valueColor = "dim"; // El valor original que se va (en dim)
-						labelColor = isDryRun ? "magenta" : "green"; // La acción
+						valueColor = "dim";
+						labelColor = isDryRun ? "magenta" : "green";
 						statusLabel = isDryRun ? "(Differs / Overwrite)" : "(Updated)";
 
 						// Mostramos: "ValorViejo -> ValorNuevo (Estado)"
-						// Usamos finalValueDisplay (que debería ser el valor de la plantilla)
 						string diffText = $"[{valueColor}]{diff.OriginalValue}[/] → [{labelColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]";
 						tagExecutionDetails[tag.Name] = (check.Value, labelColor, diffText);
 					}
 					else
 					{
 						// CASO: Diferente + Overwrite apagado -> Se protege el original
-						valueColor = "yellow"; // El valor original protegido (llama la atención)
-						labelColor = "red"; // AJUSTE: La etiqueta es roja para el conflicto
+						valueColor = "yellow";
+						labelColor = "red";
 						statusLabel = "(Differs / Kept)";
 
 						string targetValueDisplay = diff.NewValue;
@@ -1348,7 +1383,6 @@ public class MetadataService : IMetadataService
 					valueColor = "dim";
 					labelColor = "green";
 					statusLabel = "(Match / Kept)";
-					// Usamos el valor existente (finalValueDisplay) ya que es igual al valor de la plantilla
 					tagExecutionDetails[tag.Name] = (check.Value, valueColor, $"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]");
 				}
 				continue;
@@ -1359,12 +1393,12 @@ public class MetadataService : IMetadataService
 			// ---------------------------------------------------------
 
 			// ************************************************************
-			// AJUSTE: Manejo de Placeholder [NOT_SET]
+			// USO DEL PLACEHOLDER [NOT_SET]
 			// ************************************************************
-			if (check.Value == MetadataNotSetValue)
+			if (check.Value == Constants.MetadataNotSetValue) // <--- USO DE CONSTANTE REAL
 			{
 				// Este es un valor intencional para tags requeridos que estaban vacíos.
-				valueColor = "dim"; // El valor es [NOT_SET]
+				valueColor = "dim";
 				labelColor = "yellow";
 				statusLabel = isDryRun ? "(New Placeholder)" : "(Written Placeholder)";
 
@@ -1381,13 +1415,13 @@ public class MetadataService : IMetadataService
 				if (isDryRun)
 				{
 					// CONFIGURACIÓN DRY RUN
-					valueColor = "cyan";    // El valor: Unknown (Llama la atención)
-					labelColor = "yellow";     // AJUSTE: La acción: (New / To Write) (Aviso)
+					valueColor = "cyan";
+					labelColor = "yellow";
 					statusLabel = "(New / To Write)";
 				}
 				else
 				{
-					// CONFIGURACIÓN REAL RUN (Todo verde indica éxito)
+					// CONFIGURACIÓN REAL RUN
 					valueColor = "green";
 					labelColor = "green";
 					statusLabel = "(Written)";

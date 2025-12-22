@@ -72,10 +72,92 @@ Templates:
         ValueKey: OriginalSubseconds
         
     ############################################################
-    # 5. STANDARD TAGS SYNC (Industry Compatibility)
+    # 5. STANDARD TAGS SYNC (Industry Compatibility & DATE PERSISTENCE)
     ############################################################
+
+    # --- 5.1 DATE PERSISTENCE (Conditional) ---
     
-    # --- Standard Author ---
+    # Tags EXIF (Solo para Fotos)
+    - Name: ExifIFD:DateTimeOriginal
+      Required: true
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+
+    - Name: ExifIFD:CreateDate
+      Required: true
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+
+    - Name: ExifIFD:ModifyDate
+      Required: true
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+
+    # Tags QuickTime/Keys (Solo para Videos)
+    - Name: QuickTime:DateTimeOriginal
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+
+    - Name: QuickTime:CreateDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+
+    - Name: QuickTime:MediaCreateDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+
+    - Name: QuickTime:TrackCreateDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+        
+    - Name: Keys:CreationDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+        
+    - Name: QuickTime:ModifyDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+
+    - Name: QuickTime:MediaModifyDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+
+    - Name: QuickTime:TrackModifyDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+        
+    # --- 5.2 Standard Sync (Universal) ---
+    
     - Name: XMP-dc:Creator
       Required: true
       Source: 

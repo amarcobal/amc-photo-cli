@@ -313,6 +313,7 @@ public static class Program
 			services.AddTransient<IMetadataConfigurationService, MetadataConfigurationService>();
 			services.AddTransient<IValidator<ToolOptions>, ToolOptionsValidator>();
 			services.AddTransient<IProgressService, SpectreConsoleProgressService>();
+			services.AddTransient<IAssetTypeService, AssetTypeService>();
 
 			if (typeof(TConsoleRunner) == typeof(ArchiveRunner))
 			{

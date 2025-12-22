@@ -1,3 +1,5 @@
+using PhotoCli.Core.Models.Enums;
+using PhotoCli.Core.Services.Implementations;
 using PhotoCli.Core.Utils;
 using System.IO.Abstractions;
 
@@ -5,12 +7,13 @@ namespace PhotoCli.Core.Models;
 
 public record PhotoFile
 {
-	public PhotoFile(IFileInfo source)
+	public PhotoFile(IFileInfo source, AssetType type)
 	{
 		var sourcePath = source.ToString();
 		SourcePath = sourcePath ?? throw new PhotoCliException("Source path don't have any value");
 		SourceFullPath = source.FullName;
 		(FileName, Extension) = PathHelper.GetFileNameExtensionSeparately(sourcePath);
+		Type = type;
 	}
 
 	public void SetTarget(string targetRelativePath, string outputFolder, string? newName)
@@ -29,4 +32,6 @@ public record PhotoFile
 	public string Extension { get; }
 	public string? Sha1Hash { get; set; }
 	public string FileNameWithExtension => $"{FileName}.{Extension}";
+	public AssetType Type { get; }
+
 }

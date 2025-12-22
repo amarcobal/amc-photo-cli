@@ -40,6 +40,9 @@ public class ToolOptionsRaw
 	public string[]? SupportedExtensions { get; set; }
 	public string[]? CompanionExtensions { get; set; }
 
+	public string[]? PhotoExtensions { get; set; }
+	public string[]? VideoExtensions { get; set; }
+
 	public string? AuthorsYaml { get; set; }
 	public string? DevicesYaml { get; set; }
 	public string? MetadataTemplatesYaml { get; set; }

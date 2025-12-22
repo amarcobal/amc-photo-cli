@@ -26,6 +26,7 @@ public class IngestRunner : BaseRunner, IConsoleRunner
 	private readonly ILogger<IngestRunner> _logger;
 	private readonly IConsoleWriter _consoleWriter;
 	private readonly ToolOptions _toolOptions;
+	private readonly IAssetTypeService _assetTypeService;
 
 	public IngestRunner(
 		ILogger<IngestRunner> logger,
@@ -43,6 +44,7 @@ public class IngestRunner : BaseRunner, IConsoleRunner
 		ICsvService csvService,
 		IFileSystem fileSystem,
 		IConsoleWriter consoleWriter,
+		IAssetTypeService assetTypeService,
 		ToolOptions toolOptions,
 		Statistics statistics) : base(logger, fileSystem, statistics, consoleWriter)
 	{
@@ -60,6 +62,7 @@ public class IngestRunner : BaseRunner, IConsoleRunner
 		_reverseGeocodeFetcherService = reverseGeocodeFetcherService;
 		_csvService = csvService;
 		_fileSystem = fileSystem;
+		_assetTypeService = assetTypeService;
 		_consoleWriter = consoleWriter;
 		_toolOptions = toolOptions;
 	}
@@ -95,7 +98,7 @@ public class IngestRunner : BaseRunner, IConsoleRunner
 			// The Copy method returns new Photo objects with Target set, but we need them as Source for next steps.
 			// Actually, Copy returns photos with TargetFullPath set.
 			// We need to re-create Photo objects from these targets to treat them as new sources.
-			photos = photos.Select(p => new Photo(_fileSystem.FileInfo.New(p.PhotoFile.TargetFullPath!))).ToList();
+			photos = photos.Select(p => new Photo(_fileSystem.FileInfo.New(p.PhotoFile.TargetFullPath!), _assetTypeService)).ToList();
 		}
 
 		try

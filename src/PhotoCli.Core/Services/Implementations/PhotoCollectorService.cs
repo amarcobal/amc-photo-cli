@@ -23,19 +23,22 @@ public class PhotoCollectorService : IPhotoCollectorService
 	private readonly ToolOptions _toolOptions;
 	private readonly ILogger<PhotoCollectorService> _logger;
 	private readonly IFileSystem _fileSystem;
+	private readonly IAssetTypeService _assetTypeService;
 
 	public PhotoCollectorService(
 		IFileSystem fileSystem,
 		IProgressService progressService,
 		Statistics statistics,
 		ToolOptions toolOptions,
-		ILogger<PhotoCollectorService> logger)
+		ILogger<PhotoCollectorService> logger,
+		IAssetTypeService assetTypeService)
 	{
 		_fileSystem = fileSystem;
 		_progressService = progressService;
 		_statistics = statistics;
 		_toolOptions = toolOptions;
 		_logger = logger;
+		_assetTypeService = assetTypeService;
 	}
 
 	public IReadOnlyCollection<Photo> Collect(string folderPath, bool allDirectories, bool searchCompanionFiles)
@@ -125,7 +128,7 @@ public class PhotoCollectorService : IPhotoCollectorService
 
 					var photoFile = _fileSystem.FileInfo.New(filePath);
 					var photoCompanionFileInfo = photoCompanionFiles.Select(photoCompanionFile => _fileSystem.FileInfo.New(photoCompanionFile)).ToList();
-					var photo = new Photo(photoFile, photoCompanionFileInfo.Count > 0 ? photoCompanionFileInfo.ToArray() : null);
+					var photo = new Photo(photoFile, _assetTypeService, photoCompanionFileInfo.Count > 0 ? photoCompanionFileInfo.ToArray() : null);
 					companionFileCount += photoCompanionFileInfo.Count;
 					photosInternal.Add(photo);
 
@@ -149,7 +152,7 @@ public class PhotoCollectorService : IPhotoCollectorService
 				foreach (var filePath in filePaths)
 				{
 					mainTask.UpdateDescription($"[yellow]{TaskPhotoCollectionName}:[/] [dim]{Path.GetFileName(filePath)}[/]");
-					var photo = new Photo(_fileSystem.FileInfo.New(filePath));
+					var photo = new Photo(_fileSystem.FileInfo.New(filePath), _assetTypeService);
 					photosInternal.Add(photo);
 					mainTask.Increment(1);
 				}

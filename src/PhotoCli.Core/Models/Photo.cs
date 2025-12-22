@@ -1,3 +1,5 @@
+using PhotoCli.Core.Models.Enums;
+using PhotoCli.Core.Services.Contracts;
 using PhotoCli.Core.Utils;
 using System.IO.Abstractions;
 
@@ -5,17 +7,27 @@ namespace PhotoCli.Core.Models;
 
 public record Photo
 {
-	public Photo(IFileInfo photoFile, IFileInfo[]? companionFiles = null)
+	public Photo(IFileInfo photoFile, IAssetTypeService assetTypeService, IFileInfo[]? companionFiles = null)
 	{
-		PhotoFile = new PhotoFile(photoFile);
+		AssetType mainAssetType = assetTypeService.GetAssetType(photoFile.Extension);
+
+		PhotoFile = new PhotoFile(photoFile, mainAssetType);
 		if (companionFiles != null)
-			CompanionFiles = companionFiles.Select(companionFile => new PhotoFile(companionFile)).ToArray();
+			CompanionFiles = companionFiles.Select(companionFile =>
+			{
+				AssetType companionAssetType = assetTypeService.GetAssetType(companionFile.Extension);
+				return new PhotoFile(companionFile, companionAssetType);
+			}).ToArray();
 	}
 
 	#region File
 
 	public PhotoFile PhotoFile { get; init; }
 	public IReadOnlyCollection<PhotoFile>? CompanionFiles { get; init; }
+
+	public bool IsUnknown => PhotoFile.Type == AssetType.Unknown;
+	public bool IsPhoto => PhotoFile.Type == AssetType.Photo;
+	public bool IsVideo => PhotoFile.Type == AssetType.Video;
 
 	public string? NewName { get; private set; }
 

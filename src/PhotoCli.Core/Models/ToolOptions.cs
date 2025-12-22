@@ -30,6 +30,8 @@ public class ToolOptions
 	internal const int CoordinatePrecisionDefault = 4;
 	internal static readonly string[] SupportedExtensionsDefault = [ "jpg", "jpeg", "heic", "png" ];
 	public static readonly string[] CompanionExtensionsDefault = [ "mov" ];
+	public static readonly string[] PhotoExtensionsDefault = ["jpg", "jpeg", "heic", "png", "rw2", "tiff"];
+	public static readonly string[] VideoExtensionsDefault = ["mp4", "mov", "3gp", "avi", "mkv"];
 	internal const string? AuthorsYamlDefault = "";
 	internal const string? DevicesYamlDefault = "";
 	internal const string? MetadataTemplatesYamlDefault = "";
@@ -70,6 +72,8 @@ public class ToolOptions
 		CoordinatePrecision = options.CoordinatePrecision ?? CoordinatePrecisionDefault;
 		SupportedExtensions = options.SupportedExtensions ?? SupportedExtensionsDefault;
 		CompanionExtensions = options.CompanionExtensions ?? CompanionExtensionsDefault;
+		PhotoExtensions = options.PhotoExtensions ?? PhotoExtensionsDefault;
+		VideoExtensions = options.VideoExtensions ?? VideoExtensionsDefault;
 		AuthorsYaml = options.AuthorsYaml;
 		DevicesYaml = options.DevicesYaml;
 		MetadataTemplatesYaml = options.MetadataTemplatesYaml;
@@ -111,6 +115,9 @@ public class ToolOptions
 	public string ArchivePhotoTakenDateHashSeparator { get; set; }
 	public string[] SupportedExtensions { get; set; }
 	public string[] CompanionExtensions { get; set; }
+
+	public string[] PhotoExtensions { get; set; }
+	public string[] VideoExtensions { get; set; }
 
 	public string? AuthorsYaml { get; set; }
 	public string? DevicesYaml { get; set; }

@@ -24,9 +24,10 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 	private readonly MetadataOptions _options;
 	private readonly ToolOptions _toolOptions;
 	private readonly IConsoleWriter _consoleWriter;
+	private readonly IAssetTypeService _assetTypeService;
 
 	public MetadataRunner(ILogger<MetadataRunner> logger, MetadataOptions options, IPhotoCollectorService photoCollectorService, IExifDataAppenderService exifDataAppenderService, IMediaIdentityAppenderService mediaIdentityAppenderService,
-		IFileSystem fileSystem, ICsvService csvService, IMetadataService metadataService, ToolOptions toolOptions, Statistics statistics, IConsoleWriter consoleWriter) : base(logger, fileSystem, statistics, consoleWriter)
+		IFileSystem fileSystem, ICsvService csvService, IMetadataService metadataService, ToolOptions toolOptions, Statistics statistics, IConsoleWriter consoleWriter, IAssetTypeService assetTypeService) : base(logger, fileSystem, statistics, consoleWriter)
 	{
 		_options = options;
 		_logger = logger;
@@ -38,6 +39,7 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 		_csvService = csvService;
 		_toolOptions = toolOptions;
 		_consoleWriter = consoleWriter;
+		_assetTypeService = assetTypeService;
 	}
 
 	public async Task<ExitCode> Execute()
@@ -62,7 +64,7 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 		if (_options.InputFiles?.Any() == true)
 		{
 			photos = _options.InputFiles
-				.Select(f => new Photo(_fileSystem.FileInfo.New(f)))
+				.Select(f => new Photo(_fileSystem.FileInfo.New(f), _assetTypeService))
 				.ToList();
 
 			if (photos.Count == 0)

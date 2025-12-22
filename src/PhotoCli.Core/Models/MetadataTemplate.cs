@@ -1,3 +1,5 @@
+using PhotoCli.Core.Models.Enums;
+
 namespace PhotoCli.Core.Models;
 
 public class MetadataTemplatesRoot // <-- ¡Este es el nombre!
@@ -11,6 +13,8 @@ public class TemplateTag
 {
 	public string Name { get; set; } = string.Empty;
 	public bool Required { get; set; } = false;
+	// El tag aplica a un tipo específico de asset (Photo, Video, All)
+	public MetadataAssetType AssetType { get; set; }
 	public MetadataSource Source { get; set; }
 }
 
