@@ -3,6 +3,7 @@ using PhotoCli.Core.Models;
 using PhotoCli.Core.Models.Enums;
 using PhotoCli.Core.Services.Contracts;
 using PhotoCli.Core.Utils;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace PhotoCli.Core.Services.Implementations;
@@ -62,7 +63,7 @@ public class ExifOrganizerService : IExifOrganizerService
 			var (filteredByAuthors, keptDontHaveAuthors) = FilterByNoAuthorAction(filteredAndSortedInternal, noAuthorAction);
 			_logger.LogDebug("Filtered by no author action: Filtered to {FilterToCount}, kept not in filter {KeptNotInFilterCount}", filteredByAuthors.Count, keptDontHaveAuthors.Count);
 			filteredAndSortedInternal = filteredByAuthors;
-			keptFilesNotInFilterInternal.AddRange(keptDontHaveAuthors);
+			keptFilesNotInFilterInternal.AddRange(keptFilesNotInFilterInternal);
 		}
 
 		if (_noPhotoTakenActionsToFilter.Contains(noPhotoDateTimeTakenAction))
@@ -181,11 +182,18 @@ public class ExifOrganizerService : IExifOrganizerService
 
 	private IOrderedEnumerable<Photo> FilterAndOrderPhotosWithTakenDateTime(IEnumerable<Photo> photos)
 	{
-		return photos.Where(w => w.HasTakenDateTime).OrderBy(o => o.TakenDateTime).ThenBy(t => t.PhotoFile.FileName).ThenBy(t => t.PhotoFile.SourcePath);
+		// ⭐️ CORRECCIÓN FINAL: Usamos la propiedad canónica (DateTimeOffset?) para el ordenamiento.
+		return photos.Where(w => w.HasOriginalDateTime)
+			.OrderBy(o => o.OriginalDateTime) // <-- ¡Usar OriginalDateTime (DateTimeOffset?) para la máxima precisión!
+			.ThenBy(t => t.PhotoFile.FileName)
+			.ThenBy(t => t.PhotoFile.SourcePath);
 	}
 
 	private IOrderedEnumerable<Photo> FilterAndOrderPhotosWithoutTakenDateTime(IEnumerable<Photo> photos)
 	{
-		return photos.Where(w => !w.HasTakenDateTime).OrderBy(o => o.PhotoFile.FileName).ThenBy(t => t.PhotoFile.SourcePath);
+		// ⭐️ CORRECTO: Usamos la verificación canónica (HasOriginalDateTime)
+		return photos.Where(w => !w.HasOriginalDateTime)
+			.OrderBy(o => o.PhotoFile.FileName)
+			.ThenBy(t => t.PhotoFile.SourcePath);
 	}
 }

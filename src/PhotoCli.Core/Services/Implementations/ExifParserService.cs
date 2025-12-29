@@ -4,6 +4,7 @@ using MetadataExtractor.Formats.Exif;
 using MetadataExtractor.Formats.Xmp;
 using Microsoft.Extensions.Logging;
 using PhotoCli.Core.Models;
+using PhotoCli.Core.Models.Enums;
 using PhotoCli.Core.Services.Contracts;
 using XmpCore;
 using Directory = MetadataExtractor.Directory;
@@ -27,7 +28,7 @@ public class ExifParserService : IExifParserService
 		_coordinatePrecision = options.CoordinatePrecision;
 	}
 
-	public ExifData? Parse(string filePath, bool parseDateTime, bool parseCoordinate, bool parseMakeModel = false, bool parseSubseconds = false, bool parseOriginalFileName = false)
+	public ExifData? Parse(string filePath, AssetType fileType, bool parseDateTime, bool parseCoordinate, bool parseMakeModel = false, bool parseSubseconds = false, bool parseOriginalFileName = false)
 	{
 		var fileStream = _fileSystem.FileStream.New(filePath, FileMode.Open);
 		IReadOnlyList<Directory> fileDataDirectories;

@@ -46,21 +46,21 @@ public class DirectoryGrouperService : IDirectoryGrouperService
 			{
 				targetRelativeDirectoryPath = string.Join(Path.DirectorySeparatorChar, exifData.ReverseGeocodes);
 			}
-			else if (exifData?.TakenDate != null && groupByFolderType is GroupByFolderType.Year)
+			else if (exifData?.OriginalDateTime != null && groupByFolderType is GroupByFolderType.Year)
 			{
-				targetRelativeDirectoryPath = exifData.TakenDate.Value.ToString(_options.YearFormat);
+				targetRelativeDirectoryPath = exifData.OriginalDateTimeForFileOperations!.Value.ToString(_options.YearFormat);
 			}
-			else if (exifData?.TakenDate != null && groupByFolderType is GroupByFolderType.YearMonth)
+			else if (exifData?.OriginalDateTime != null && groupByFolderType is GroupByFolderType.YearMonth)
 			{
-				targetRelativeDirectoryPath = $"{exifData.TakenDate.Value.ToString(_options.YearFormat)}{Path.DirectorySeparatorChar}{exifData.TakenDate.Value.ToString(_options.MonthFormat)}";
+				targetRelativeDirectoryPath = $"{exifData.OriginalDateTimeForFileOperations!.Value.ToString(_options.YearFormat)}{Path.DirectorySeparatorChar}{exifData.OriginalDateTimeForFileOperations!.Value.ToString(_options.MonthFormat)}";
 			}
-			else if (exifData?.TakenDate != null && groupByFolderType is GroupByFolderType.YearMonthDay)
+			else if (exifData?.OriginalDateTime != null && groupByFolderType is GroupByFolderType.YearMonthDay)
 			{
-				targetRelativeDirectoryPath = $"{exifData.TakenDate.Value.ToString(_options.YearFormat)}{Path.DirectorySeparatorChar}{exifData.TakenDate.Value.ToString(_options.MonthFormat)}{Path.DirectorySeparatorChar}{exifData.TakenDate.Value.ToString(_options.DayFormat)}";
+				targetRelativeDirectoryPath = $"{exifData.OriginalDateTimeForFileOperations!.Value.ToString(_options.YearFormat)}{Path.DirectorySeparatorChar}{exifData.OriginalDateTimeForFileOperations!.Value.ToString(_options.MonthFormat)}{Path.DirectorySeparatorChar}{exifData.OriginalDateTimeForFileOperations!.Value.ToString(_options.DayFormat)}";
 			}
-			else if (exifData?.TakenDate != null && groupByFolderType is GroupByFolderType.DecadeYearYearShortMonthNameYearMonthDay)
+			else if (exifData?.OriginalDateTime != null && groupByFolderType is GroupByFolderType.DecadeYearYearShortMonthNameYearMonthDay)
 			{
-				var taken = exifData.TakenDate.Value;
+				var taken = exifData.OriginalDateTimeForFileOperations!.Value;
 
 				// Decade
 				var decade = $"{taken.Year / 10 * 10}s"; // 2025 -> "2020s"
@@ -110,7 +110,7 @@ public class DirectoryGrouperService : IDirectoryGrouperService
 			}
 			else
 			{
-				var noPhotoTakenShouldBeInSubFolder = exifData?.TakenDate == null && noPhotoDateTimeTakenGroupedInSubFolder;
+				var noPhotoTakenShouldBeInSubFolder = exifData?.OriginalDateTime == null && noPhotoDateTimeTakenGroupedInSubFolder;
 				var noReverseGeocodeShouldBeInSubFolder = exifData?.ReverseGeocodes == null && noReverseGeocodeGroupedInSubFolder;
 				if (noPhotoTakenShouldBeInSubFolder && noReverseGeocodeShouldBeInSubFolder)
 					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoAddressAndPhotoTakenDateFolderName);
@@ -130,7 +130,7 @@ public class DirectoryGrouperService : IDirectoryGrouperService
 				else if (noDeviceShouldBeInSubFolder && noPhotoTakenShouldBeInSubFolder)
 					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoDeviceAndPhotoTakenDateFolderName);
 				else if (noAuthorShouldBeInSubFolder && noPhotoTakenShouldBeInSubFolder)
-					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoAuthorAndPhotoTakenDateFolderName);
+					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoAuthorAndDeviceAndPhotoTakenDateFolderName);
 				else if (noDeviceShouldBeInSubFolder)
 					targetRelativeDirectoryPath = Path.Combine(targetRelativeDirectoryPath, _options.NoDeviceFolderName);
 				else if (noAuthorShouldBeInSubFolder)

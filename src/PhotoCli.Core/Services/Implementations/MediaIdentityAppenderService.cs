@@ -59,14 +59,14 @@ public class MediaIdentityAppenderService : IMediaIdentityAppenderService
 
 				//Statistics (se mantiene igual)
 				// 🔹 Combinaciones con taken date
-				if (photo.HasTakenDateTime && photo.HasDevice)
+				if (photo.HasOriginalDateTime && photo.HasDevice)
 					++_statistics.PhotoThatHasTakenDateAndDevice;
-				else if (photo.HasTakenDateTime && !photo.HasDevice)
+				else if (photo.HasOriginalDateTime && !photo.HasDevice)
 					++_statistics.PhotoThatHasTakenDateButNoDevice;
 
-				if (photo.HasTakenDateTime && photo.HasAuthor)
+				if (photo.HasOriginalDateTime && photo.HasAuthor)
 					++_statistics.PhotoThatHasTakenDateAndAuthor;
-				else if (photo.HasTakenDateTime && !photo.HasAuthor)
+				else if (photo.HasOriginalDateTime && !photo.HasAuthor)
 					++_statistics.PhotoThatHasTakenDateButNoAuthor;
 
 				// 🔹 Combinaciones Device / Author

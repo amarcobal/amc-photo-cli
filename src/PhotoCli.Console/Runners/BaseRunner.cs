@@ -150,7 +150,7 @@ public abstract class BaseRunner
 		if (allPhotosHasPhotoTaken || !isPreventProcessOptionSelected)
 			return false;
 		_logger.LogDebug("Prevented process because no photo taken date action set to prevent process");
-		var photosWithNoPhotoTakenDate = photos.Where(w => !w.HasTakenDateTime);
+		var photosWithNoPhotoTakenDate = photos.Where(w => !w.HasOriginalDateTime);
 		foreach (var photo in photosWithNoPhotoTakenDate)
 			_logger.LogError("No photo taken date: {Path}", photo.PhotoFile.SourcePath);
 		return true;

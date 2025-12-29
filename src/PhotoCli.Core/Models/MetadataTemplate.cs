@@ -13,9 +13,9 @@ public class TemplateTag
 {
 	public string Name { get; set; } = string.Empty;
 	public bool Required { get; set; } = false;
-	// El tag aplica a un tipo específico de asset (Photo, Video, All)
-	public MetadataAssetType AssetType { get; set; }
+	public MetadataAssetType AssetType { get; set; } = MetadataAssetType.All;
 	public MetadataSource Source { get; set; }
+	public bool Overwrite { get; set; } = false;
 }
 
 

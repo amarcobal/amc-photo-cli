@@ -2,6 +2,9 @@ using PhotoCli.Core.Models.Enums;
 using PhotoCli.Core.Services.Contracts;
 using PhotoCli.Core.Utils;
 using System.IO.Abstractions;
+using System.Collections.Generic;
+using System.Linq;
+using System;
 
 namespace PhotoCli.Core.Models;
 
@@ -40,10 +43,40 @@ public record Photo
 	public ExifData? ExifData { get; private set; }
 	public bool HasExifData => ExifData != null;
 
-	#region Exif - Photo Taken Date
+	#region Exif - Photo Taken Date and TimeZone (Curada y Canónica) ⭐️ REFRACTORIZADO
 
-	public DateTime? TakenDateTime => ExifData?.TakenDate;
-	public bool HasTakenDateTime => TakenDateTime.HasValue;
+	// ⭐️ 1. Fecha Canónica (Local + Offset) - Prioridad 1
+	public DateTimeOffset? OriginalDateTime => ExifData?.OriginalDateTime;
+	public bool HasOriginalDateTime => OriginalDateTime.HasValue;
+
+	// ⭐️ 2. Fecha Naive/Local (Sin Offset)
+	public DateTime? OriginalDateTimeLocal => ExifData?.OriginalDateTimeLocal;
+	public bool HasOriginalDateTimeLocal => OriginalDateTimeLocal.HasValue;
+
+	// ⭐️ 3. Fecha UTC (Universal) - Prioridad 2
+	public DateTimeOffset? OriginalDateTimeUTC => ExifData?.OriginalDateTimeUTC;
+	public bool HasOriginalDateTimeUTC => OriginalDateTimeUTC.HasValue;
+
+	// ⭐️ 4. TimeZone Offset (Ej: "+01:00")
+	public string? OriginalTimeZoneOffset => ExifData?.OriginalTimeZoneOffset;
+	public bool HasOriginalTimeZoneOffset => !string.IsNullOrWhiteSpace(OriginalTimeZoneOffset);
+
+	// ⭐️ 5. TimeZone Info (Objeto TimeZoneInfo, calculado de forma Lazy)
+	public TimeZoneInfo? OriginalTimeZoneInfo => ExifData?.OriginalTimeZoneInfo;
+	public bool HasOriginalTimeZoneInfo => OriginalTimeZoneInfo != null;
+
+	// Propiedad de conveniencia: Offset como TimeSpan (derivado de OriginalDateTime)
+	public TimeSpan? TimeZoneOffset => OriginalDateTime?.Offset;
+	public bool HasTimeZoneOffset => TimeZoneOffset.HasValue;
+
+	// ⭐️ Propiedad de Conveniencia para el Renombrado
+	/// <summary>
+	/// La hora local de la cámara (Naive, sin offset). 
+	/// Es la hora preferida para operaciones de renombrado y agrupación por carpetas.
+	/// Es el valor que antes se mapeaba a TakenDate.
+	/// </summary>
+	public DateTime? OriginalDateTimeForFileOperations => OriginalDateTimeLocal;
+	public bool HasOriginalDateTimeForFileOperations => OriginalDateTimeForFileOperations.HasValue;
 
 	#endregion
 
@@ -61,7 +94,7 @@ public record Photo
 	#region Exif - Subseconds
 
 	public SubSeconds? Subseconds => ExifData?.SubSeconds;
-	public bool HasSubSeconds => Subseconds!=null;
+	public bool HasSubSeconds => Subseconds != null;
 
 	#endregion
 

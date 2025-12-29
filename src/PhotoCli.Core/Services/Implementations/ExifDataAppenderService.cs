@@ -49,11 +49,11 @@ public class ExifDataAppenderService : IExifDataAppenderService
 			{
 				task.UpdateDescription($"[yellow]{TaskName}:[/] [dim]{Path.GetFileName(photo.PhotoFile.SourceFullPath)}[/]");
 
-				var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, true, true, true, true, true);
+				var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, photo.PhotoFile.Type, true, true, true, true, true);
 
 				if (exifData == null)
 					photosAreValid = false;
-				if (photosHasPhotoTaken && exifData?.TakenDate == null)
+				if (photosHasPhotoTaken && exifData?.OriginalDateTime == null)
 					photosHasPhotoTaken = false;
 				if (photosHasCoordinate && exifData?.Coordinate == null)
 					photosHasCoordinate = false;
@@ -109,11 +109,11 @@ public class ExifDataAppenderService : IExifDataAppenderService
 			{
 				task.UpdateDescription($"[yellow]{TaskName}:[/] [dim]{Path.GetFileName(photo.PhotoFile.SourceFullPath)}[/]");
 
-				var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, true, true, true, true, true);
+				var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, photo.PhotoFile.Type, true, true, true, true, true);
 
 				if (exifData == null)
 					photosAreValid = false;
-				if (photosHasPhotoTaken && exifData?.TakenDate == null)
+				if (photosHasPhotoTaken && exifData?.OriginalDateTime == null)
 					photosHasPhotoTaken = false;
 				if (photosHasCoordinate && exifData?.Coordinate == null)
 					photosHasCoordinate = false;
@@ -168,11 +168,11 @@ public class ExifDataAppenderService : IExifDataAppenderService
 		// por lo que este método interno solo necesita verificar todas las banderas.
 		foreach (var photo in photos)
 		{
-			var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, true, true, true, true, true);
+			var exifData = _exifParserService.Parse(photo.PhotoFile.SourcePath, photo.PhotoFile.Type, true, true, true, true, true);
 
 			if (exifData == null)
 				photosAreValid = false;
-			if (photosHasPhotoTaken && exifData?.TakenDate == null)
+			if (photosHasPhotoTaken && exifData?.OriginalDateTime == null)
 				photosHasPhotoTaken = false;
 			if (photosHasCoordinate && exifData?.Coordinate == null)
 				photosHasCoordinate = false;

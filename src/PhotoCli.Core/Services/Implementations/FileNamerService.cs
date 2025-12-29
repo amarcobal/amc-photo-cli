@@ -67,8 +67,8 @@ public class FileNamerService : IFileNamerService
 		{
 			if (photo.PhotoFile.Sha1Hash.IsPresent())
 			{
-				if (photo.TakenDateTime.HasValue)
-					photo.SetNewName(photo.TakenDateTime.Value.ToString(_options.DateTimeFormatWithSeconds) + _options.ArchivePhotoTakenDateHashSeparator + photo.PhotoFile.Sha1Hash);
+				if (photo.HasOriginalDateTimeForFileOperations)
+					photo.SetNewName(photo.OriginalDateTimeForFileOperations!.Value.ToString(_options.DateTimeFormatWithSeconds) + _options.ArchivePhotoTakenDateHashSeparator + photo.PhotoFile.Sha1Hash);
 				else
 					photo.SetNewName(photo.PhotoFile.Sha1Hash);
 			}

@@ -52,7 +52,7 @@ Templates:
     ############################################################
     # 2. ORIGIN (The immutable "backup" of the original state)
     ############################################################
-    
+
     - Name: XMP-AMC:OriginOriginalFileName
       Required: true
       Source:
@@ -64,6 +64,24 @@ Templates:
       Source:
         Type: Variable
         ValueKey: OriginalDateTime
+
+    - Name: XMP-AMC:OriginOriginalDateTimeLocal
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: OriginalDateTimeLocal
+
+    - Name: XMP-AMC:OriginOriginalDateTimeUTC
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC
+
+    - Name: XMP-AMC:OriginOriginalTimeZoneOffset
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: OriginalTimeZoneOffset
 
     - Name: XMP-AMC:OriginOriginalSubseconds
       Required: true
@@ -83,21 +101,21 @@ Templates:
       AssetType: Photo
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeLocal
 
     - Name: ExifIFD:CreateDate
       Required: true
       AssetType: Photo
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeLocal
 
     - Name: ExifIFD:ModifyDate
       Required: true
       AssetType: Photo
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeLocal
 
     # Tags QuickTime/Keys (Solo para Videos)
     - Name: QuickTime:DateTimeOriginal
@@ -106,57 +124,99 @@ Templates:
       Source: 
         Type: Variable
         ValueKey: OriginalDateTime
+      Overwrite: true
 
     - Name: QuickTime:CreateDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeUTC
+      Overwrite: true
 
     - Name: QuickTime:MediaCreateDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeUTC
+      Overwrite: true
 
     - Name: QuickTime:TrackCreateDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeUTC
+      Overwrite: true
         
     - Name: Keys:CreationDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeUTC
+      Overwrite: true
         
     - Name: QuickTime:ModifyDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeUTC
+      Overwrite: true
 
     - Name: QuickTime:MediaModifyDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeUTC
+      Overwrite: true
 
     - Name: QuickTime:TrackModifyDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: OriginalDateTimeUTC
+      Overwrite: true
+
+
+    # --- 5.2 TIMEZONE & LOCATION (Context Anchor - Heuristics 1 & 2) ---
+
+    # Offsets para Fotos (EXIF)
+    - Name: ExifIFD:OffsetTimeOriginal
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalTimeZoneOffset  # Ej: "+02:00"
+
+    - Name: ExifIFD:OffsetTime
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalTimeZoneOffset
+
+    - Name: ExifIFD:OffsetTimeDigitized
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalTimeZoneOffset
+
+    # Offsets para Videos (Keys) - ¡CRUCIAL PARA LA CURACIÓN!
+    - Name: Keys:OffsetTime
+      Required: false
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalTimeZoneOffset  # Ej: "+02:00"
+      Overwrite: true
         
-    # --- 5.2 Standard Sync (Universal) ---
+    # --- 5.3 Standard Sync (Universal) ---
     
     - Name: XMP-dc:Creator
       Required: true

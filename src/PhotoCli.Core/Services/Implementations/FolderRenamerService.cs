@@ -104,7 +104,8 @@ public class FolderRenamerService : IFolderRenamerService
 
 	private bool HasNoPhotoTakenDate(IEnumerable<Photo> orderedPhotos, string targetRelativeDirectoryPath)
 	{
-		var hasNoPhotoTakenDate = !orderedPhotos.Any(a => a.HasTakenDateTime);
+		// ⭐️ CORRECCIÓN 1: Usar HasOriginalDateTime (verificación canónica)
+		var hasNoPhotoTakenDate = !orderedPhotos.Any(a => a.HasOriginalDateTime);
 		if (hasNoPhotoTakenDate)
 			_logger.LogDebug("No photo taken date will locate on {TargetRelativePath}, skipping folder renaming", targetRelativeDirectoryPath);
 		return hasNoPhotoTakenDate;
@@ -113,7 +114,7 @@ public class FolderRenamerService : IFolderRenamerService
 	private DateTime GetFirstPhotoTakenDate(IReadOnlyCollection<Photo> orderedPhotos, string targetRelativeDirectoryPath)
 	{
 		var orderedPhotosThatHavePhotoTakenDate = VerifyAndGetOrderedPhotoList(orderedPhotos);
-		var firstDateTime = orderedPhotosThatHavePhotoTakenDate.First().TakenDateTime!.Value;
+		var firstDateTime = orderedPhotosThatHavePhotoTakenDate.First().OriginalDateTimeForFileOperations!.Value;
 		_logger.LogDebug("First photo taken date as {FirstTakenDate} will locate on {TargetRelativePath}", firstDateTime, targetRelativeDirectoryPath);
 		return firstDateTime;
 	}
@@ -121,15 +122,15 @@ public class FolderRenamerService : IFolderRenamerService
 	private (DateTime, DateTime) GetFirstAndLastPhotoTakenDate(IReadOnlyCollection<Photo> orderedPhotos, string targetRelativeDirectoryPath)
 	{
 		var orderedPhotosThatHavePhotoTakenDate = VerifyAndGetOrderedPhotoList(orderedPhotos);
-		var firstDateTime = orderedPhotosThatHavePhotoTakenDate.First().TakenDateTime!.Value;
-		var lastDateTime = orderedPhotosThatHavePhotoTakenDate.Last().TakenDateTime!.Value;
+		var firstDateTime = orderedPhotosThatHavePhotoTakenDate.First().OriginalDateTimeForFileOperations!.Value;
+		var lastDateTime = orderedPhotosThatHavePhotoTakenDate.Last().OriginalDateTimeForFileOperations!.Value;
 		_logger.LogDebug("First photo taken date as {FirstTakenDate}, and last photo taken as {LastTakenDate} will locate on {TargetRelativePath}", firstDateTime, lastDateTime, targetRelativeDirectoryPath);
 		return (firstDateTime, lastDateTime);
 	}
 
 	private List<Photo> VerifyAndGetOrderedPhotoList(IReadOnlyCollection<Photo> orderedPhotos)
 	{
-		var orderedPhotosThatHavePhotoTakenDate = orderedPhotos.Where(w => w.HasTakenDateTime).ToList();
+		var orderedPhotosThatHavePhotoTakenDate = orderedPhotos.Where(w => w.HasOriginalDateTime).ToList();
 		orderedPhotosThatHavePhotoTakenDate.ThrowIfNotOrderedByPhotoTakenDate();
 		return orderedPhotosThatHavePhotoTakenDate;
 	}

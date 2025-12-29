@@ -75,9 +75,17 @@ public class CsvService : ICsvService
 		await csv.WriteRecordsAsync(photoCsvModels);
 	}
 
+	// Dentro de PhotoCli.Core.Services.Implementations.CsvService
+
 	private static PhotoCsv Map(Photo photo, bool mapNewPath)
 	{
-		var takenDate = photo.ExifData?.TakenDate;
+		// ⭐️ CAMBIO 1: Usar la nueva propiedad canónica Naive/Local de Photo
+		var originalDateTimeLocal = photo.OriginalDateTimeLocal;
+
+		// ❌ Eliminamos la variable 'var takenDate = photo.ExifData?.Origin;'
+		//    y la sustituimos por la variable clara:
+		var takenDate = originalDateTimeLocal;
+
 		var subseconds = photo.ExifData?.SubSeconds?.Padded();
 		var make = photo.ExifData?.Make;
 		var model = photo.ExifData?.Model;
@@ -89,12 +97,34 @@ public class CsvService : ICsvService
 		var reverseGeocodes = photo.ExifData?.ReverseGeocodes?.ToList();
 		var newPath = mapNewPath ? photo.PhotoFile.TargetRelativePath : null;
 
-		var photoCsv = new PhotoCsv(photo.PhotoFile.SourceFullPath, newPath, takenDate,
-			photo.ExifData?.ReverseGeocodeFormatted, coordinate?.Latitude, coordinate?.Longitude,
-			takenDate?.Year, takenDate?.Month, takenDate?.Day, takenDate?.Hour, takenDate?.Minute,
-			takenDate?.Second, subseconds, author, device, make, model, originalFileName,  reverseGeocodes?.ElementAtOrDefault(0), reverseGeocodes?.ElementAtOrDefault(1), reverseGeocodes?.ElementAtOrDefault(2),
+		var photoCsv = new PhotoCsv(
+			photo.PhotoFile.SourceFullPath,
+			newPath,
+			takenDate, // <-- Ahora es OriginalDateTimeLocal (DateTime?)
+			photo.ExifData?.ReverseGeocodeFormatted,
+			coordinate?.Latitude,
+			coordinate?.Longitude,
+
+			// Usamos el mismo objeto para los componentes
+			takenDate?.Year,
+			takenDate?.Month,
+			takenDate?.Day,
+			takenDate?.Hour,
+			takenDate?.Minute,
+			takenDate?.Second,
+
+			subseconds,
+			author,
+			device,
+			make,
+			model,
+			originalFileName,
+
+			reverseGeocodes?.ElementAtOrDefault(0), reverseGeocodes?.ElementAtOrDefault(1), reverseGeocodes?.ElementAtOrDefault(2),
 			reverseGeocodes?.ElementAtOrDefault(3), reverseGeocodes?.ElementAtOrDefault(4), reverseGeocodes?.ElementAtOrDefault(5), reverseGeocodes?.ElementAtOrDefault(6),
-			reverseGeocodes?.ElementAtOrDefault(7), photo.PhotoFile.Sha1Hash);
+			reverseGeocodes?.ElementAtOrDefault(7),
+
+			photo.PhotoFile.Sha1Hash);
 
 		return photoCsv;
 	}

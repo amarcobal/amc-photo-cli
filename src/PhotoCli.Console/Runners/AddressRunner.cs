@@ -25,33 +25,33 @@ public class AddressRunner : IConsoleRunner
 
 	public async Task<ExitCode> Execute()
 	{
-		var outputFile = _fileSystem.FileInfo.New(_options.InputPath);
-		if (!outputFile.Exists)
-			return ExitCode.InputFileNotExists;
+		//var outputFile = _fileSystem.FileInfo.New(_options.InputPath);
+		//if (!outputFile.Exists)
+		//	return ExitCode.InputFileNotExists;
 
-		var photoExifData = _exifParserService.Parse(_options.InputPath, false, true);
-		if (photoExifData?.Coordinate == null)
-			return ExitCode.PhotosWithNoCoordinatePreventedProcess;
+		//var photoExifData = _exifParserService.Parse(_options.InputPath, false, true);
+		//if (photoExifData?.Coordinate == null)
+		//	return ExitCode.PhotosWithNoCoordinatePreventedProcess;
 
-		switch (_options.AddressListType)
-		{
-			case AddressListType.AllAvailableProperties:
-				var allAvailableReverseGeocodes = await _reverseGeocodeService.AllAvailableReverseGeocodes(photoExifData.Coordinate);
-				foreach (var (propertyName, propertyValue) in allAvailableReverseGeocodes)
-					_consoleWriter.Write($"{propertyName}: {propertyValue}");
-				break;
-			case AddressListType.SelectedProperties:
-				var reverseGeocodes = await _reverseGeocodeService.Get(photoExifData.Coordinate);
-				var formattedReverseGeocodes = string.Join(Environment.NewLine, reverseGeocodes);
-				_consoleWriter.Write(formattedReverseGeocodes);
-				break;
-			case AddressListType.FullResponse:
-				var rawResponse = await _reverseGeocodeService.RawResponse(photoExifData.Coordinate!);
-				_consoleWriter.Write(rawResponse);
-				break;
-			default:
-				throw new PhotoCliException($"Not implemented {nameof(AddressListType)}: {_options.AddressListType}");
-		}
+		//switch (_options.AddressListType)
+		//{
+		//	case AddressListType.AllAvailableProperties:
+		//		var allAvailableReverseGeocodes = await _reverseGeocodeService.AllAvailableReverseGeocodes(photoExifData.Coordinate);
+		//		foreach (var (propertyName, propertyValue) in allAvailableReverseGeocodes)
+		//			_consoleWriter.Write($"{propertyName}: {propertyValue}");
+		//		break;
+		//	case AddressListType.SelectedProperties:
+		//		var reverseGeocodes = await _reverseGeocodeService.Get(photoExifData.Coordinate);
+		//		var formattedReverseGeocodes = string.Join(Environment.NewLine, reverseGeocodes);
+		//		_consoleWriter.Write(formattedReverseGeocodes);
+		//		break;
+		//	case AddressListType.FullResponse:
+		//		var rawResponse = await _reverseGeocodeService.RawResponse(photoExifData.Coordinate!);
+		//		_consoleWriter.Write(rawResponse);
+		//		break;
+		//	default:
+		//		throw new PhotoCliException($"Not implemented {nameof(AddressListType)}: {_options.AddressListType}");
+		//}
 
 		return ExitCode.Success;
 	}

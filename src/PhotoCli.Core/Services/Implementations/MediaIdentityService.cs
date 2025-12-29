@@ -76,7 +76,7 @@ public class MediaIdentityService : IMediaIdentityService
 
 	public Author GetAuthor(Photo photo)
 	{
-		var takenDate = photo.TakenDateTime;
+		var takenDate = photo.OriginalDateTimeForFileOperations;
 		var device = photo.Device;
 
 		if (takenDate.HasValue)
