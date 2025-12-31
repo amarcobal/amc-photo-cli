@@ -252,19 +252,23 @@ namespace SharpExifTool
 
 		#region WRITE
 
-		public Task<int> WriteTagsAsync(string filename, ICollection<KeyValuePair<string, string>> properties, bool overwriteOriginal = false)
+		public Task<int> WriteTagsAsync(string filename, ICollection<KeyValuePair<string, string>> properties, ICollection<string> extraCommands = null, bool overwriteOriginal = false)
 		{
-			return Task.FromResult(WriteTags(filename, properties, overwriteOriginal));
+			return Task.FromResult(WriteTags(filename, properties, extraCommands, overwriteOriginal));
 		}
 
-		public int WriteTags(string filename, ICollection<KeyValuePair<string, string>> properties, bool overwriteOriginal = false, bool isVerbose = false)
+		public int WriteTags(string filename, ICollection<KeyValuePair<string, string>> properties, ICollection<string> extraCommands = null, bool overwriteOriginal = false, bool isVerbose = false)
 		{
 			var commands = new List<string> { };
 
-			// Si quieres controlar el verbose, pásalo con isVerbose
 			if (isVerbose)
 			{
 				commands.Add("-v2");
+			}
+
+			if (extraCommands != null)
+			{
+				commands.AddRange(extraCommands);
 			}
 
 			foreach (var property in properties)
@@ -336,7 +340,7 @@ namespace SharpExifTool
 			WriteTags(
 				filename,
 				new Dictionary<string, string> { ["all"] = "" },
-				overwriteOriginal);
+				overwriteOriginal: overwriteOriginal);
 
 			return 0;
 		}

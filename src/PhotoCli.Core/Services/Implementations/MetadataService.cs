@@ -1638,9 +1638,20 @@ public class MetadataService : IMetadataService
 	{
 		try
 		{
+			var exifToolCommands = new List<string>();
+
+			// 1. Lógica de Negocio: -P para todos los archivos (Preservar la fecha del sistema)
+			exifToolCommands.Add("-P");
+
+			// 2. Lógica de Negocio: -m solo para videos (Ignorar errores menores/desbloquear QuickTime)
+			if (photo.IsVideo)
+			{
+				exifToolCommands.Add("-m");
+			}
+
 			using (var exifTool = new ExifTool(exiftoolConfigPath: _options.ExifToolFileConfig))
 			{
-				exifTool.WriteTags(photo.PhotoFile.SourcePath, tagsToWrite, overwriteOriginal: true);
+				exifTool.WriteTags(photo.PhotoFile.SourcePath, tagsToWrite, exifToolCommands, overwriteOriginal: true);
 				_statistics.PhotosMetadataProcessed++;
 
 				var updatedPhotos = _exifDataAppenderService.ExtractExifData(
