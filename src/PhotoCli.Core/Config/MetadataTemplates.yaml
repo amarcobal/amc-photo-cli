@@ -93,9 +93,9 @@ Templates:
     # 5. STANDARD TAGS SYNC (Industry Compatibility & DATE PERSISTENCE)
     ############################################################
 
-    # --- 5.1 DATE PERSISTENCE (Conditional) ---
-    
-    # Tags EXIF (Solo para Fotos)
+    # --- 5.1 PHOTO PERSISTENCE (EXIF Standard) ---
+    # Para fotos, el estándar manda usar la hora local sin offset en estos tags.
+
     - Name: ExifIFD:DateTimeOriginal
       Required: true
       AssetType: Photo
@@ -117,8 +117,19 @@ Templates:
         Type: Variable
         ValueKey: OriginalDateTimeLocal
 
-    # Tags QuickTime/Keys (Solo para Videos)
-    - Name: QuickTime:DateTimeOriginal
+    # --- 5.2 VIDEO PERSISTENCE (Triple-Layer Curation) ---
+    # Aplicamos la heurística para que el video se vea bien en todas las plataformas.
+
+    # LAYER A: Modern Visuals (Local + Offset) - Para Google/Apple Photos
+    - Name: Keys:CreationDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime        # Ej: 2024:04:22 17:53:18+02:00
+      Overwrite: true
+
+    - Name: ItemList:ContentCreateDate
       Required: true
       AssetType: Video
       Source: 
@@ -126,64 +137,98 @@ Templates:
         ValueKey: OriginalDateTime
       Overwrite: true
 
+    # LAYER B: Legacy Compatibility (Local)
+    - Name: UserData:DateTimeOriginal
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime   # Ej: 2024:04:22 17:53:18
+      Overwrite: true
+
+    # LAYER C: ISO Standard (Strict UTC) - Para consistencia interna del contenedor
     - Name: QuickTime:CreateDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTimeUTC
+        ValueKey: OriginalDateTimeUTC_NoZ # Ej: 2024:04:22 15:53:18
       Overwrite: true
 
-    - Name: QuickTime:MediaCreateDate
-      Required: true
-      AssetType: Video
-      Source: 
-        Type: Variable
-        ValueKey: OriginalDateTimeUTC
-      Overwrite: true
-
-    - Name: QuickTime:TrackCreateDate
-      Required: true
-      AssetType: Video
-      Source: 
-        Type: Variable
-        ValueKey: OriginalDateTimeUTC
-      Overwrite: true
-        
-    - Name: Keys:CreationDate
-      Required: true
-      AssetType: Video
-      Source: 
-        Type: Variable
-        ValueKey: OriginalDateTimeUTC
-      Overwrite: true
-        
     - Name: QuickTime:ModifyDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTimeUTC
+        ValueKey: OriginalDateTimeUTC_NoZ
+      Overwrite: true
+
+    # Tags de Media y Track (Sincronizados en UTC)
+    - Name: QuickTime:MediaCreateDate
+      Required: true
+      AssetType: Video
+      WriteTag: QuickTime:MediaCreateDate
+      ReadTag: Composite:MyMediaCreateDate
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ
+      Overwrite: true
+
+    - Name: QuickTime:TrackCreateDate
+      Required: true
+      AssetType: Video
+      WriteTag: QuickTime:TrackCreateDate
+      ReadTag: Composite:MyTrackCreateDate
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ
       Overwrite: true
 
     - Name: QuickTime:MediaModifyDate
       Required: true
       AssetType: Video
+      WriteTag: QuickTime:MediaModifyDate
+      ReadTag: Composite:MyMediaModifyDate
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTimeUTC
+        ValueKey: OriginalDateTimeUTC_NoZ
       Overwrite: true
 
     - Name: QuickTime:TrackModifyDate
       Required: true
       AssetType: Video
+      WriteTag: QuickTime:TrackModifyDate
+      ReadTag: Composite:MyTrackModifyDate
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTimeUTC
+        ValueKey: OriginalDateTimeUTC_NoZ
       Overwrite: true
 
+    # --- 5.3 XMP STANDARDS (Global Sync) ---
+    # Estos tags aseguran que softwares como Lightroom o Adobe Bridge vean la fecha correcta con Offset.
 
-    # --- 5.2 TIMEZONE & LOCATION (Context Anchor - Heuristics 1 & 2) ---
+    - Name: XMP-exif:DateTimeOriginal
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    - Name: XMP-xmp:CreateDate
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    - Name: XMP-xmp:ModifyDate
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    # --- 5.4 TIMEZONE & LOCATION (Context Anchor - Heuristics 1 & 2) ---
 
     # Offsets para Fotos (EXIF)
     - Name: ExifIFD:OffsetTimeOriginal
@@ -206,17 +251,8 @@ Templates:
       Source: 
         Type: Variable
         ValueKey: OriginalTimeZoneOffset
-
-    # Offsets para Videos (Keys) - ¡CRUCIAL PARA LA CURACIÓN!
-    - Name: Keys:OffsetTime
-      Required: false
-      AssetType: Video
-      Source: 
-        Type: Variable
-        ValueKey: OriginalTimeZoneOffset  # Ej: "+02:00"
-      Overwrite: true
         
-    # --- 5.3 Standard Sync (Universal) ---
+    # --- 5.5 Standard Sync (Universal) ---
     
     - Name: XMP-dc:Creator
       Required: true

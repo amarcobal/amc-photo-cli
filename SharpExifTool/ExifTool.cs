@@ -13,6 +13,8 @@ namespace SharpExifTool
 	{
 		private readonly string _exifToolBin;
 		private const string Arguments = @"-stay_open 1 -@ - -common_args -charset UTF8 -G1 -args";
+		private const string SessionControl = "-stay_open 1 -@ -";
+		private const string DefaultArgs = "-common_args -G1 -args";
 		private readonly string _exitCommand
 			= string.Join(Environment.NewLine, new string[] { "-stay_open", "0", $"-execute{Environment.NewLine}" });
 		private const int Timeout = 30000;      // in milliseconds
@@ -24,10 +26,11 @@ namespace SharpExifTool
 		private StreamWriter _writer;
 		private StreamReader _reader;
 
-		public ExifTool(string exiftoolPath = "", string exiftoolConfigPath = "")
+		public ExifTool(string exiftoolPath = "", string exiftoolConfigPath = "", IEnumerable<string> commonArgs = null)
 		{
 			var currentDir = Path.GetDirectoryName(new System.Uri(System.Reflection.Assembly.GetExecutingAssembly().CodeBase).LocalPath);
 
+			// 1. Determinar la ruta del binario
 			if (string.IsNullOrEmpty(exiftoolPath))
 			{
 				if (string.IsNullOrWhiteSpace(currentDir))
@@ -45,7 +48,9 @@ namespace SharpExifTool
 				_exifToolBin = exiftoolPath;
 			}
 
-			string arguments;
+			var argsList = new List<string>();
+
+			// A: El Config siempre primero
 			if (!string.IsNullOrEmpty(exiftoolConfigPath))
 			{
 				var resolvedConfigPath = Path.IsPathRooted(exiftoolConfigPath)
@@ -55,21 +60,64 @@ namespace SharpExifTool
 				if (!File.Exists(resolvedConfigPath))
 					throw new FileNotFoundException("ExifTool config not found.", resolvedConfigPath);
 
-				arguments = $"-config \"{resolvedConfigPath}\" {Arguments}";
-			}
-			else
-			{
-				arguments = Arguments;
+				argsList.Add($"-config \"{resolvedConfigPath}\"");
 			}
 
-			// Prepare process start
-			var psi = new ProcessStartInfo(_exifToolBin, arguments)
+			// B: Flags de API (si vienen en commonArgs como -api QuickTimeUTC=1)
+			if (commonArgs != null)
+			{
+				argsList.AddRange(commonArgs);
+			}
+
+			// C: Configuración de Charset para la sesión
+			argsList.Add("-charset UTF8");
+
+			// D: Control de sesión
+			argsList.Add("-stay_open 1");
+			argsList.Add("-@ -");
+
+			// E: Argumentos comunes para cada comando
+			argsList.Add("-common_args");
+			argsList.Add("-G1");
+			argsList.Add("-n"); // Si quieres que -n sea global
+			argsList.Add("-args");
+
+			string finalArgs = string.Join(" ", argsList);
+
+			//// 2. Preparar la lista de argumentos
+			//var argsList = new List<string>();
+
+			//// Agregar Config si existe
+			//if (!string.IsNullOrEmpty(exiftoolConfigPath))
+			//{
+			//	var resolvedConfigPath = Path.IsPathRooted(exiftoolConfigPath)
+			//		? exiftoolConfigPath
+			//		: Path.GetFullPath(Path.Combine(currentDir, exiftoolConfigPath));
+
+			//	if (!File.Exists(resolvedConfigPath))
+			//		throw new FileNotFoundException("ExifTool config not found.", resolvedConfigPath);
+
+			//	argsList.Add($"-config \"{resolvedConfigPath}\"");
+			//}
+
+			//// Agregar argumentos comunes (API flags, -n, etc.)
+			//if (commonArgs != null)
+			//{
+			//	argsList.AddRange(commonArgs);
+			//}
+
+			//// 3. Combinar con los argumentos base necesarios para el funcionamiento de la clase
+			//// Es vital que Arguments (-stay_open, -common_args, -G1...) vaya al final
+			//string finalArgs = string.Join(" ", argsList) + $" {Arguments}";
+
+			// 4. Configurar el inicio del proceso
+			var psi = new ProcessStartInfo(_exifToolBin, finalArgs)
 			{
 				UseShellExecute = false,
 				CreateNoWindow = true,
 				RedirectStandardInput = true,
 				RedirectStandardOutput = true,
-				StandardOutputEncoding = _utf8NoBom
+				StandardOutputEncoding = _utf8NoBom // Asegura que acentos como "Adrián" se lean bien
 			};
 
 			try
@@ -85,11 +133,83 @@ namespace SharpExifTool
 				throw new ApplicationException("Failed to load ExifTool. 'ExifTool.exe' should be located in the same directory as the application or on the path.", err);
 			}
 
-			// ProcessStartInfo in .NET Framework doesn't have a StandardInputEncoding property (though it does in .NET Core)
-			// So, we have to wrap it this way.
+			// 5. Inicializar el Writer y Reader para la comunicación bidireccional
 			_writer = new StreamWriter(_processExifTool.StandardInput.BaseStream, _utf8NoBom);
 			_reader = _processExifTool.StandardOutput;
 		}
+
+		//public ExifTool(string exiftoolPath = "", string exiftoolConfigPath = "", IEnumerable<string> initialApiFlags = null)
+		//{
+		//	var currentDir = Path.GetDirectoryName(new System.Uri(System.Reflection.Assembly.GetExecutingAssembly().CodeBase).LocalPath);
+
+		//	if (string.IsNullOrEmpty(exiftoolPath))
+		//	{
+		//		if (string.IsNullOrWhiteSpace(currentDir))
+		//			throw new InvalidOperationException();
+
+		//		_exifToolBin =
+		//			RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+		//			? Path.Combine(currentDir, "ExifTool.Win", "exiftool.exe")
+		//			: Path.Combine(currentDir, "ExifTool.Unix", "exiftool");
+		//	}
+		//	else
+		//	{
+		//		if (!File.Exists(exiftoolPath))
+		//			throw new FileNotFoundException("ExifTool not found.", exiftoolPath);
+		//		_exifToolBin = exiftoolPath;
+		//	}
+
+		//	string arguments = string.Empty;
+		//	if (!string.IsNullOrEmpty(exiftoolConfigPath))
+		//	{
+		//		var resolvedConfigPath = Path.IsPathRooted(exiftoolConfigPath)
+		//			? exiftoolConfigPath
+		//			: Path.GetFullPath(Path.Combine(currentDir, exiftoolConfigPath));
+
+		//		if (!File.Exists(resolvedConfigPath))
+		//			throw new FileNotFoundException("ExifTool config not found.", resolvedConfigPath);
+
+		//		arguments = $"-config \"{resolvedConfigPath}\"";
+		//	}
+
+		//	// ⭐️ 3. Agregar los Flags de API (si existen)
+		//	if (initialApiFlags != null)
+		//	{
+		//		// Concatenar los flags de API. Ejemplo: "-api QuickTimeUTC=1 -api LargeFileSupport=1"
+		//		var apiString = string.Join(" ", initialApiFlags.Select(flag => $"{flag}"));
+		//		arguments += $" {apiString}";
+		//	}
+
+		//	arguments += $" {Arguments}";
+
+		//	// Prepare process start
+		//	var psi = new ProcessStartInfo(_exifToolBin, arguments)
+		//	{
+		//		UseShellExecute = false,
+		//		CreateNoWindow = true,
+		//		RedirectStandardInput = true,
+		//		RedirectStandardOutput = true,
+		//		StandardOutputEncoding = _utf8NoBom
+		//	};
+
+		//	try
+		//	{
+		//		_processExifTool = Process.Start(psi);
+		//		if (_processExifTool == null || _processExifTool.HasExited)
+		//		{
+		//			throw new ApplicationException("Failed to launch ExifTool!");
+		//		}
+		//	}
+		//	catch (System.ComponentModel.Win32Exception err)
+		//	{
+		//		throw new ApplicationException("Failed to load ExifTool. 'ExifTool.exe' should be located in the same directory as the application or on the path.", err);
+		//	}
+
+		//	// ProcessStartInfo in .NET Framework doesn't have a StandardInputEncoding property (though it does in .NET Core)
+		//	// So, we have to wrap it this way.
+		//	_writer = new StreamWriter(_processExifTool.StandardInput.BaseStream, _utf8NoBom);
+		//	_reader = _processExifTool.StandardOutput;
+		//}
 
 		/*
         public Task<int> ExecuteAsync(string args)
@@ -261,11 +381,6 @@ namespace SharpExifTool
 		{
 			var commands = new List<string> { };
 
-			if (isVerbose)
-			{
-				commands.Add("-v2");
-			}
-
 			if (extraCommands != null)
 			{
 				commands.AddRange(extraCommands);
@@ -294,6 +409,11 @@ namespace SharpExifTool
 				commands.Add("-overwrite_original");
 
 			commands.Add(filename);
+
+			if (isVerbose)
+			{
+				commands.Add("-v3");
+			}
 
 			// 1. Ejecutar los comandos. Esto envía los argumentos y el -execute.
 			Execute(commands);

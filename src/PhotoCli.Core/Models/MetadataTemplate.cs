@@ -12,10 +12,12 @@ public class MetadataTemplatesRoot // <-- ¡Este es el nombre!
 public class TemplateTag
 {
 	public string Name { get; set; } = string.Empty;
+	public string? WriteTag { get; set; }
+	public string? ReadTag { get; set; }
 	public bool Required { get; set; } = false;
 	public MetadataAssetType AssetType { get; set; } = MetadataAssetType.All;
-	public MetadataSource Source { get; set; }
 	public bool Overwrite { get; set; } = false;
+	public MetadataSource Source { get; set; }
 }
 
 

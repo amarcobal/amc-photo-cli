@@ -40,6 +40,12 @@ namespace PhotoCli.Core.Services.Implementations
 		public const string MyShortMonthName = $"{CompositeTagNamespace}:MyShortMonthName";
 		public const string MySubseconds = $"{CompositeTagNamespace}:MySubseconds";
 
+		// Video Dates (Custom composite tags)
+		public const string TrackCreateDate = $"{CompositeTagNamespace}:MyTrackCreateDate";
+		public const string TrackModifyDate = $"{CompositeTagNamespace}:MyTrackModifyDate";
+		public const string MediaCreateDate = $"{CompositeTagNamespace}:MyMediaCreateDate";
+		public const string MediaModifyDate = $"{CompositeTagNamespace}:MyMediaModifyDate";
+
 		//Name Convention
 		public const string MyFullFolderFileConvention = $"{CompositeTagNamespace}:MyFullFolderFileConvention";
 		public const string MyFolderConvention = $"{CompositeTagNamespace}:MyFolderConvention";
@@ -98,20 +104,36 @@ namespace PhotoCli.Core.Services.Implementations
 		{
 			try
 			{
-				// 1. Preparamos argumentos opcionales
-				var optionalArgs = new List<string>();
+				// 1. CONFIGURACIÓN DEL MOTOR DE EXIFTOOL (CommonArgs)
+				// Estos argumentos se pasan al constructor y afectan a cómo se extraen los datos.
+				var commonArgs = new List<string>
+				{
+					"-a",  // --allowDuplicates: Muestra todos los tags aunque tengan el mismo nombre.
+					//"-G1", // --groupNames: Muestra el nombre del grupo específico (ej. [Keys], [UserData]).
+					"-s",  // --short: Formato corto de etiquetas (necesario para el parseo de SharpExifTool).
+					"-n"   // --printConv: Valores numéricos/crudos (GPS decimal y offsets con signo).
+				};
 
-				// ⭐️ Curación de Video: Forzar QuickTimeUTC=0 para asegurar la hora local correcta
+				// Lógica específica según el tipo de archivo (Vídeo vs Foto)
 				if (fileType == AssetType.Video)
 				{
-					optionalArgs.Add("QuickTimeUTC=0");
+					// -api QuickTimeUTC=0: Crucial para que ExifTool no intente convertir las fechas
+					// a la zona horaria del sistema actual. Leemos el valor literal del archivo.
+					commonArgs.Add("-api QuickTimeUTC=0");
+
+					// -api LargeFileSupport=1: Necesario para procesar vídeos que superen los 4GB.
+					commonArgs.Add("-api LargeFileSupport=1");
 				}
 
 				Dictionary<string, string> metadata;
-				using (var exifTool = new ExifTool(exiftoolConfigPath: _options.ExifToolFileConfig))
+
+				// Instanciamos ExifTool con la configuración específica
+				using (var exifTool = new ExifTool(
+					exiftoolConfigPath: _options.ExifToolFileConfig,
+					commonArgs: commonArgs))
 				{
-					// ⭐️ Pasamos los argumentos opcionales a ExtractAllMetadata
-					metadata = exifTool.ExtractAllMetadata(filePath, optionalArgs.ToArray());
+					// Extraemos todos los metadatos. El flag -G1 y -s ya vienen en la constante 'Arguments' de tu clase.
+					metadata = exifTool.ExtractAllMetadata(filePath);
 				}
 
 				//Dates
