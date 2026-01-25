@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Services.Contracts;
 using PhotoCli.Core.Utils;
+using PhotoCli.Core.Utils.Constants;
 using System.IO.Abstractions;
 using System.Security.Cryptography;
 using System.Text;

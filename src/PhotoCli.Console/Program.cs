@@ -30,6 +30,7 @@ using PhotoCli.Core.Models.ReverseGeocode.OpenStreetMap;
 using Spectre.Console;
 using PhotoCli.Core.Services.Implementations.SpectreConsole;
 using PhotoCli.Core.Services.Contracts.SpectreConsole;
+using PhotoCli.Core.Utils.Constants;
 
 namespace PhotoCli.Console;
 

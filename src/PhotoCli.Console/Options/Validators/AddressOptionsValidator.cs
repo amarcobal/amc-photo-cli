@@ -1,6 +1,6 @@
 using FluentValidation;
 using PhotoCli.Core.Models.Enums;
-using PhotoCli.Core.Utils;
+using PhotoCli.Core.Utils.Constants;
 
 namespace PhotoCli.Console.Options.Validators;
 

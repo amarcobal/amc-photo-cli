@@ -3,7 +3,7 @@ using PhotoCli.Console.Options;
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Models.Enums;
 using PhotoCli.Core.Services.Contracts;
-using PhotoCli.Core.Utils;
+using PhotoCli.Core.Utils.Constants;
 using System.IO.Abstractions;
 
 namespace PhotoCli.Console.Runners;

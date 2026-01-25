@@ -14,7 +14,9 @@ using System.Threading.Tasks;
 using PhotoCli.Migrations;
 using PhotoCli.Core.Services.Contracts.SpectreConsole;
 using System.Reflection.Metadata;
-using PhotoCli.Core.Utils;
+using System.Globalization;
+using PhotoCli.Core.Utils.Constants;
+using PhotoCli.Core.Utils.Extensions;
 
 namespace PhotoCli.Core.Services.Implementations;
 
@@ -77,23 +79,29 @@ public class MetadataService : IMetadataService
 		// 6. Solo el Offset
 		{ "OriginalTimeZoneOffset", p => p.OriginalTimeZoneOffset }, 
 
-		//// 1. Hora Local con Offset (La verdad completa)
-		//{ "OriginalDateTime", p => p.OriginalDateTime?.ToString("yyyy:MM:dd HH:mm:sszzz") },
-		//// 1. Hora Local formato ISO 8601 
-		//{ "OriginalDateTimeISO8601", p => p.OriginalDateTime?.ToString("yyyy:MM:ddTHH:mm:sszzz") },
-		//// 2. Hora Normalizada a UTC
-		//{ "OriginalDateTimeUTC", p => p.OriginalDateTimeUTC?.ToString("yyyy:MM:dd HH:mm:ssZ") }, 
-		//// 3. Solo el Offset
-		//{ "OriginalTimeZoneOffset", p => p.OriginalTimeZoneOffset }, 
-		//// ⭐️ ADICIONAL: Hora Naive/Local para renombrado
-		//{ "OriginalDateTimeLocal", p => p.OriginalDateTimeLocal?.ToString("yyyy:MM:dd HH:mm:ss") },
-		//// 4. Hora Normalizada a UTC sin Z (Quicktime no puede almacenarla)
-		//{ "OriginalDateTimeUTC_NoZ", p => p.OriginalDateTimeUTC?.ToString("yyyy:MM:dd HH:mm:ss") },
-
 		{ "OriginalFileName", p => p.PhotoFile.FileNameWithExtension },
 		{ "Make", p => p.Make },
 		{ "Model", p => p.Model },
 		{ "OriginalSubseconds", p => p.HasSubSeconds ? p.Subseconds?.Padded() : Constants.MetadataNotSetValue },
+
+		// GEOLOCATION
+		{ "GPSLatitude", p => p.Coordinate != null ? Math.Abs(p.Coordinate.Latitude).ToString("R", CultureInfo.InvariantCulture) : null },
+
+		{ "GPSLongitude", p => p.Coordinate != null ? Math.Abs(p.Coordinate.Longitude).ToString("R", CultureInfo.InvariantCulture) : null },
+
+		// Refs necesarios para EXIF (N, S, E, W)
+		{ "GPSLatitudeRef", p => p.Coordinate != null ? (p.Coordinate.Latitude >= 0 ? "N" : "S") : null },
+		{ "GPSLongitudeRef", p => p.Coordinate != null ? (p.Coordinate.Longitude >= 0 ? "E" : "W") : null },
+
+		// Formato compatible con ExifTool (Latitud, Longitud)
+		{ "GPSCoordinatesISO", p => p.Coordinate != null
+		? string.Format(CultureInfo.InvariantCulture, "{0:G} {1:G}", 
+			p.Coordinate.Latitude, p.Coordinate.Longitude)
+		: null },
+
+		// Fechas formateadas para el bloque GPS de fotos
+		{ "OriginalDateUTC_GPS", p => p.OriginalDateTimeUTC?.ToString("yyyy:MM:dd") },
+		{ "OriginalTimeUTC_GPS", p => p.OriginalDateTimeUTC?.ToString("HH:mm:ss") },
 	};
 
 	public MetadataService(
@@ -1718,8 +1726,9 @@ public class MetadataService : IMetadataService
 
 		foreach (var tag in templateTags)
 		{
-			// Revalidamos contra el tag de salida (tag.Name)
-			bool hasValue = photoMetadataDict.TryGetValue(tag.Name, out var value) &&
+			// Revalidamos contra el tag de salida
+			string readKey = string.IsNullOrWhiteSpace(tag.ReadTag) ? tag.Name : tag.ReadTag;
+			bool hasValue = photoMetadataDict.TryGetValue(readKey, out var value) &&
 						!string.IsNullOrWhiteSpace(value) &&
 						!value.Equals("undefined", StringComparison.OrdinalIgnoreCase);
 

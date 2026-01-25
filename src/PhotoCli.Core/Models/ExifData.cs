@@ -159,5 +159,5 @@ public record ExifData
 	public IEnumerable<string>? ReverseGeocodes { get; set; }
 	public string? ReverseGeocodeFormatted => ReverseGeocodes != null ? string.Join(_reverseGeocodeSeparator, ReverseGeocodes) : null;
 
-	public Dictionary<string, string> Metadata { get; set; }
+	public Dictionary<string, string>? Metadata { get; set; }
 }

@@ -7,6 +7,7 @@ using PhotoCli.Core.Models;
 using PhotoCli.Core.Models.Enums;
 using PhotoCli.Core.Services.Contracts;
 using PhotoCli.Core.Utils;
+using PhotoCli.Core.Utils.Constants;
 using LogLevel = PhotoCli.Core.Models.LogLevel;
 
 namespace PhotoCli.Console.Runners;

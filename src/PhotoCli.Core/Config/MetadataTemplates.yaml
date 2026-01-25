@@ -90,12 +90,12 @@ Templates:
         ValueKey: OriginalSubseconds
         
     ############################################################
-    # 5. STANDARD TAGS SYNC (Industry Compatibility & DATE PERSISTENCE)
+    # 3. STANDARD TAGS SYNC (Industry Compatibility)
     ############################################################
 
-    # --- 5.1 PHOTO PERSISTENCE (EXIF Standard) ---
-    # Para fotos, el estándar manda usar la hora local sin offset en estos tags.
+    # --- 3.1 PHOTO PERSISTENCE (EXIF Standard) ---
 
+    # Synology: Exif.Photo.DateTimeOriginal (El más importante)
     - Name: ExifIFD:DateTimeOriginal
       Required: true
       AssetType: Photo
@@ -103,6 +103,7 @@ Templates:
         Type: Variable
         ValueKey: OriginalDateTimeLocal
 
+    # Synology: Exif.Photo.DateTimeDigitized
     - Name: ExifIFD:CreateDate
       Required: true
       AssetType: Photo
@@ -110,23 +111,24 @@ Templates:
         Type: Variable
         ValueKey: OriginalDateTimeLocal
 
-    - Name: ExifIFD:ModifyDate
+    # Synology: Exif.Image.DateTime (Directorio Raíz IFD0)
+    - Name: IFD0:ModifyDate
       Required: true
       AssetType: Photo
       Source: 
         Type: Variable
         ValueKey: OriginalDateTimeLocal
 
-    # --- 5.2 VIDEO PERSISTENCE (Triple-Layer Curation) ---
-    # Aplicamos la heurística para que el video se vea bien en todas las plataformas.
+    # --- 3.2 VIDEO PERSISTENCE (Multi-Layer Compatibility) ---
 
-    # LAYER A: Modern Visuals (Local + Offset) - Para Google/Apple Photos
+    # LAYER A: Modern Visuals (Local + Offset) - Google/Apple/Synology Priority
+    # Este tag "Keys:CreationDate" equivale al "com.apple.quicktime.creationdate" del blog de Synology.
     - Name: Keys:CreationDate
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime        # Ej: 2024:04:22 17:53:18+02:00
+        ValueKey: OriginalDateTime
       Overwrite: true
 
     - Name: ItemList:ContentCreateDate
@@ -137,16 +139,16 @@ Templates:
         ValueKey: OriginalDateTime
       Overwrite: true
 
-    # LAYER B: Legacy Compatibility (Local)
+    # LAYER B: Legacy Fallback
     - Name: UserData:DateTimeOriginal
       Required: true
       AssetType: Video
       Source: 
         Type: Variable
-        ValueKey: OriginalDateTime   # Ej: 2024:04:22 17:53:18
+        ValueKey: OriginalDateTime
       Overwrite: true
 
-    # LAYER C: ISO Standard (Strict UTC) - Para consistencia interna del contenedor
+    # LAYER C: ISO Standard (Strict UTC)
     - Name: QuickTime:CreateDate
       Required: true
       AssetType: Video
@@ -163,7 +165,7 @@ Templates:
         ValueKey: OriginalDateTimeUTC_NoZ
       Overwrite: true
 
-    # Tags de Media y Track (Sincronizados en UTC)
+    # Media & Track Sync (UTC)
     - Name: QuickTime:MediaCreateDate
       Required: true
       AssetType: Video
@@ -204,8 +206,7 @@ Templates:
         ValueKey: OriginalDateTimeUTC_NoZ
       Overwrite: true
 
-    # --- 5.3 XMP STANDARDS (Global Sync) ---
-    # Estos tags aseguran que softwares como Lightroom o Adobe Bridge vean la fecha correcta con Offset.
+    # --- 3.3 XMP STANDARDS (Global Sync & Synology Special Tags) ---
 
     - Name: XMP-exif:DateTimeOriginal
       Required: true
@@ -228,7 +229,16 @@ Templates:
         ValueKey: OriginalDateTime
       Overwrite: true
 
-    # --- 5.4 TIMEZONE & LOCATION (Context Anchor - Heuristics 1 & 2) ---
+    # Requisito Synology: "All videos" (Requiere .config para definir XMP-video:DateUTC)
+    - Name: XMP-video:DateUTC
+      Required: true
+      AssetType: Video
+      Source:
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ
+      Overwrite: true
+
+    # --- 3.4 TIMEZONE & OFFSETS ---
 
     # Offsets para Fotos (EXIF)
     - Name: ExifIFD:OffsetTimeOriginal
@@ -252,11 +262,18 @@ Templates:
         Type: Variable
         ValueKey: OriginalTimeZoneOffset
         
-    # --- 5.5 Standard Sync (Universal) ---
+    # --- 3.5 UNIVERSAL SYNC ---
     
     - Name: XMP-dc:Creator
       Required: true
       Source: 
+        Type: Variable
+        ValueKey: AuthorName
+
+    - Name: IFD0:Artist
+      Required: true
+      AssetType: Photo
+      Source:
         Type: Variable
         ValueKey: AuthorName
 
@@ -265,6 +282,86 @@ Templates:
       Source: 
         Type: Variable
         ValueKey: OriginalFileName
+
+    # --- 3.6 GEOLOCATION & GPS SYNC ---
+
+    # Fotos (EXIF)
+    - Name: GPS:GPSLatitude
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSLatitude
+
+    - Name: GPS:GPSLatitudeRef
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSLatitudeRef
+
+    - Name: GPS:GPSLongitude
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSLongitude
+
+    - Name: GPS:GPSLongitudeRef
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSLongitudeRef
+
+    - Name: GPS:GPSDateStamp
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateUTC_GPS
+        Overwrite: true
+
+    - Name: GPS:GPSTimeStamp
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalTimeUTC_GPS
+      Overwrite: true
+
+    # Sincronización XMP
+    - Name: XMP-exif:GPSDateTime
+      Required: false
+      Source:
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    # Vídeos (QuickTime)
+    - Name: Keys:GPSCoordinates
+      Required: false
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: GPSCoordinatesISO
+      Overwrite: true
+
+    - Name: UserData:GPSCoordinates
+      Required: false
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: GPSCoordinatesISO
+      Overwrite: true
+
+    - Name: ItemList:GPSCoordinates
+      Required: false
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: GPSCoordinatesISO
+      Overwrite: true
 
   AMC-WOF-Ingest:
     

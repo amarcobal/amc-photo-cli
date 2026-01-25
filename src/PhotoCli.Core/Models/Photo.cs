@@ -5,6 +5,7 @@ using System.IO.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using PhotoCli.Core.Utils.Constants;
 
 namespace PhotoCli.Core.Models;
 

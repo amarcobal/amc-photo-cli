@@ -1,5 +1,5 @@
 using PhotoCli.Core.Services.Contracts;
-using PhotoCli.Core.Utils;
+using PhotoCli.Core.Utils.Constants;
 
 namespace PhotoCli.Core.Services.Implementations;
 

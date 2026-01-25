@@ -1,6 +1,7 @@
 using FluentValidation;
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Utils.Extensions;
+using PhotoCli.Core.Utils.Constants;
 
 namespace PhotoCli.Core.Utils.Validators;
 
@@ -33,8 +34,8 @@ public class ToolOptionsValidator : AbstractValidator<ToolOptions>
 		RuleFor(r => r.NoAuthorAndDeviceAndPhotoTakenDateFolderName).RequiredString();
 		RuleFor(r => r.NoAuthorAndDeviceFolderName).RequiredString();
 
-		RuleFor(r => r.CsvReportFileName).RequiredString().Matches(Constants.CsvExtensionRegex);
-		RuleFor(r => r.DryRunCsvReportFileName).RequiredString().Matches(Constants.CsvExtensionRegex);
+		RuleFor(r => r.CsvReportFileName).RequiredString().Matches(PhotoCli.Core.Utils.Constants.Constants.CsvExtensionRegex);
+		RuleFor(r => r.DryRunCsvReportFileName).RequiredString().Matches(PhotoCli.Core.Utils.Constants.Constants.CsvExtensionRegex);
 
 		RuleFor(r => r.LogLevel.Default).Must(m => Enum.TryParse(typeof(Microsoft.Extensions.Logging.LogLevel), m, out _)).WithMessage(LogLevels());
 	}

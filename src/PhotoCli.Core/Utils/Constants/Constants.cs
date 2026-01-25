@@ -1,4 +1,4 @@
-namespace PhotoCli.Core.Utils;
+namespace PhotoCli.Core.Utils.Constants;
 
 public static class Constants
 {

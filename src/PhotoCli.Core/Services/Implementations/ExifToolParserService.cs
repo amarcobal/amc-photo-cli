@@ -7,71 +7,11 @@ using SharpExifTool;
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Services.Contracts;
 using PhotoCli.Core.Models.Enums;
+using PhotoCli.Core.Utils.Constants;
+using PhotoCli.Core.Utils.Extensions;
 
 namespace PhotoCli.Core.Services.Implementations
 {
-	public static class ExifToolTags
-	{
-		//CompositeTags
-		public const string CompositeTagNamespace = "Composite";
-
-		//Hashes
-		public const string MD5 = $"{CompositeTagNamespace}:MD5";
-
-		//Identity
-		public const string MyMake = $"{CompositeTagNamespace}:MyMake";
-		public const string MyModel = $"{CompositeTagNamespace}:MyModel";
-		public const string MySerialNumber = $"{CompositeTagNamespace}:MySerialNumber";
-
-		public const string MyAuthorName = $"{CompositeTagNamespace}:MyAuthorName";
-		public const string MyAuthorAlias = $"{CompositeTagNamespace}:MyAuthorAlias";
-		public const string MyDeviceName = $"{CompositeTagNamespace}:MyDeviceName";
-		public const string MyDeviceAlias = $"{CompositeTagNamespace}:MyDeviceAlias";
-
-		//Event
-		public const string MyAlbum = $"{CompositeTagNamespace}:MyAlbum";
-
-		//Dates
-		public const string MyDecade = $"{CompositeTagNamespace}:MyDecade";
-		public const string MyDate = $"{CompositeTagNamespace}:MyDate"; // Hora Naive/Local
-		public const string MyTimeZoneOffset = $"{CompositeTagNamespace}:MyTimeZoneOffset"; // Offset de TZ
-		public const string MyDateTimeUTC = $"{CompositeTagNamespace}:MyDateTimeUTC"; // Hora Normalizada a UTC
-		public const string MyDateTimeLocalOffset = $"{CompositeTagNamespace}:MyDateTimeLocalOffset";
-		public const string MyShortMonthName = $"{CompositeTagNamespace}:MyShortMonthName";
-		public const string MySubseconds = $"{CompositeTagNamespace}:MySubseconds";
-
-		// Video Dates (Custom composite tags)
-		public const string TrackCreateDate = $"{CompositeTagNamespace}:MyTrackCreateDate";
-		public const string TrackModifyDate = $"{CompositeTagNamespace}:MyTrackModifyDate";
-		public const string MediaCreateDate = $"{CompositeTagNamespace}:MyMediaCreateDate";
-		public const string MediaModifyDate = $"{CompositeTagNamespace}:MyMediaModifyDate";
-
-		//Name Convention
-		public const string MyFullFolderFileConvention = $"{CompositeTagNamespace}:MyFullFolderFileConvention";
-		public const string MyFolderConvention = $"{CompositeTagNamespace}:MyFolderConvention";
-		public const string MyFileNameConvention = $"{CompositeTagNamespace}:MyFileNameConvention";
-
-
-		// Fechas
-		public const string DateTimeOriginal = "ExifIFD:DateTimeOriginal";
-		public const string CreateDate = "ExifIFD:CreateDate";
-		public const string SubSecTimeOriginal = "ExifIFD:SubSecTimeOriginal";
-		public const string SubSecTimeDigitized = "ExifIFD:SubSecTimeDigitized";
-		public const string CompositeDateTimeOriginal = "Composite:SubSecDateTimeOriginal";
-		public const string CompositeCreateDate = "Composite:SubSecCreateDate";
-		public const string CompositeDateTimeCreated = "Composite:DateTimeCreated";
-		public const string PanasonicTimeStamp = "Panasonic:TimeStamp";
-
-		// Ubicación
-		public const string GPSLatitude = "GPSLatitude";
-		public const string GPSLongitude = "GPSLongitude";
-
-		// Otros
-		public const string PreservedFileName = "PreservedFileName";
-		public const string FileName = "FileName";
-	}
-
-
 	public class ExifToolParserService : IExifParserService
 	{
 		private readonly IFileSystem _fileSystem;
@@ -136,145 +76,91 @@ namespace PhotoCli.Core.Services.Implementations
 					metadata = exifTool.ExtractAllMetadata(filePath);
 				}
 
-				//Dates
 				DateTimeOffset? photoTaken = null;
 
-				// 1. OBTENER LOS COMPONENTES
-				// Leemos la hora Naive (local)
-				var naiveDate = metadata.GetDateTime(ExifToolTags.MyDate);
-
-				// Leemos el offset calculado por el script Perl (+01:00)
-				var offsetString = metadata.GetString(ExifToolTags.MyTimeZoneOffset);
-
-				// 2. VERIFICAR LA CONFIANZA EN EL OFFSET (Nuestra "Más Lógica")
-				// Solo si tenemos la hora Naive Y el Offset calculado por GPS/Delta
-				if (naiveDate.HasValue && !string.IsNullOrWhiteSpace(offsetString))
+				if (parseDateTime)
 				{
-					TimeSpan offsetTimeSpan;
-					bool success = false;
+					var naiveDate = metadata.GetDateTime(ExifToolTagsConstants.MyDate);
+					var offsetString = metadata.GetString(ExifToolTagsConstants.MyTimeZoneOffset);
+					var utcString = metadata.GetString(ExifToolTagsConstants.MyDateTimeUTC);
 
-					// Intento 1: Usar TryParseExact para el formato estricto "+HH:MM"
-					// El 'z' en DateTimeOffset usa el formato de Time Zone Offset (ej. +01:00)
-					// Pero TimeSpan es más tonto. Usamos 'c' (formato constante HH:MM:SS) o TryParseExact
-
-					// Si tu string es "+01:00", Intenta TryParseExact para manejar el '+'.
-					// Necesitas normalizarlo a "01:00:00" si TryParse no lo acepta con el signo.
-
-					// --- Lógica de Manejo de Formato ---
-					string normalizedOffset = offsetString;
-					// Si la cadena es +HH:MM o -HH:MM, normalizamos para que TimeSpan la entienda como duración:
-					if (normalizedOffset.Length == 6 && (normalizedOffset[0] == '+' || normalizedOffset[0] == '-'))
+					// ESTRATEGIA 1: MyDate + MyTimeZoneOffset (Confianza Alta)
+					if (naiveDate.HasValue && TryParseExifOffset(offsetString, out var offset))
 					{
-						// Esto separa el signo y el valor (ej: "+01:00" -> "01:00")
-						string sign = normalizedOffset[0].ToString();
-						string timePart = normalizedOffset.Substring(1);
+						photoTaken = new DateTimeOffset(naiveDate.Value, offset);
+						_logger.LogDebug("Time resolved via MyDate + MyTimeZoneOffset: {Offset}", offset);
+					}
 
-						// Ahora, TryParseExact solo en la parte del tiempo "01:00"
-						if (TimeSpan.TryParseExact(timePart, @"hh\:mm", CultureInfo.InvariantCulture, out offsetTimeSpan))
+					// ESTRATEGIA 2: MyDateTimeUTC (Confianza Alta - Normalizado)
+					if (!photoTaken.HasValue && !string.IsNullOrEmpty(utcString))
+					{
+						if (DateTimeOffset.TryParseExact(utcString, new[] { "yyyy:MM:dd HH:mm:ssK", "yyyy:MM:dd HH:mm:sszzz" }, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var utcDto))
 						{
-							// Aplicar el signo para obtener la duración correcta
-							if (sign == "-")
+							photoTaken = utcDto;
+							_logger.LogDebug("Time resolved via MyDateTimeUTC");
+						}
+					}
+
+					// ESTRATEGIA 3: Heurística de Nombre de Archivo (Confianza Media)
+					if (!photoTaken.HasValue)
+					{
+						var fileNameDateStr = metadata.GetString(ExifToolTagsConstants.DateTimeOriginalFromFileName);
+						if (!string.IsNullOrEmpty(fileNameDateStr) && DateTime.TryParseExact(fileNameDateStr, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var fnDate))
+						{
+							TryParseExifOffset(offsetString, out var fnOffset);
+							photoTaken = new DateTimeOffset(fnDate, fnOffset != TimeSpan.Zero ? fnOffset : TimeZoneInfo.Local.GetUtcOffset(fnDate));
+							_logger.LogDebug("Time resolved via FileName Heuristics");
+						}
+					}
+
+					// ESTRATEGIA 4: GeolocationTimeZone (Confianza Media - Búsqueda Offline OS)
+					if (!photoTaken.HasValue && naiveDate.HasValue)
+					{
+						var tzName = metadata.GetString(ExifToolTagsConstants.GeolocationTimeZone);
+						if (!string.IsNullOrEmpty(tzName))
+						{
+							try
 							{
-								offsetTimeSpan = offsetTimeSpan.Negate();
+								var tzInfo = TimeZoneInfo.FindSystemTimeZoneById(tzName);
+								photoTaken = new DateTimeOffset(naiveDate.Value, tzInfo.GetUtcOffset(naiveDate.Value));
+								_logger.LogDebug("Time resolved via GeolocationTimeZone: {tzName}", tzName);
 							}
-							success = true;
+							catch { /* TZ no soportada por el sistema operativo */ }
 						}
 					}
-					else
-					{
-						// Intento 2: Fallback al TryParse normal (por si la cadena es solo "01:00")
-						success = TimeSpan.TryParse(offsetString, CultureInfo.InvariantCulture, out offsetTimeSpan);
-					}
-					// --- Fin de Lógica de Manejo de Formato ---
 
-
-					if (success)
+					// ESTRATEGIA 5: Fallback total (Hora Local de la máquina)
+					if (!photoTaken.HasValue && naiveDate.HasValue)
 					{
-						// El Offset es válido. Construimos el DateTimeOffset COMPLETO y CORRECTO.
-						photoTaken = new DateTimeOffset(naiveDate.Value, offsetTimeSpan);
-						_logger.LogDebug("Timezone resolved using MyTimeZoneOffset: {Offset}", offsetTimeSpan);
+						photoTaken = new DateTimeOffset(naiveDate.Value, TimeZoneInfo.Local.GetUtcOffset(naiveDate.Value));
+						_logger.LogWarning("No timezone metadata found. Assuming system local time.");
 					}
 				}
 
-
-				// 3. FALLBACK DE CONFIANZA: Usar MyDateTimeUTC (Prioridad a la Hora Absoluta)
-				// Esto se ejecuta si la lógica del Offset falló (ej. formato inválido o MyDate faltante).
-				if (!photoTaken.HasValue)
-				{
-					var utcDateString = metadata.GetString(ExifToolTags.MyDateTimeUTC);
-
-					if (!string.IsNullOrWhiteSpace(utcDateString))
-					{
-						// Usamos el parser anterior para obtener la hora UTC (ej. 17:42:17 Z)
-						if (DateTimeOffset.TryParseExact(
-							utcDateString,
-							"yyyy:MM:dd HH:mm:ss K",
-							CultureInfo.InvariantCulture,
-							DateTimeStyles.AssumeUniversal,
-							out var dto))
-						{
-							photoTaken = dto.ToOffset(TimeSpan.Zero); // Garantizar que se maneje como UTC (+00:00)
-						}
-					}
-				}
-
-
-				// 4. ÚLTIMO FALLBACK: Usar Hora Naive, asumiendo el TZ de la máquina
-				// Solo si TODO lo demás falló. ¡Esto es el último recurso!
-				if (!photoTaken.HasValue && naiveDate.HasValue)
-				{
-					// Asumir que la fecha Naive es la fecha en la zona horaria del sistema de ejecución
-					photoTaken = new DateTimeOffset(naiveDate.Value, TimeZoneInfo.Local.GetUtcOffset(naiveDate.Value));
-				}
-
+				// Subseconds
 				SubSeconds? subSeconds = null;
 				if (parseSubseconds)
 				{
-					var ss = metadata.GetString(ExifToolTags.MySubseconds);
-					if (!string.IsNullOrWhiteSpace(ss))
-						subSeconds = new SubSeconds(ss);
+					var ss = metadata.GetString(ExifToolTagsConstants.MySubseconds);
+					if (!string.IsNullOrWhiteSpace(ss)) subSeconds = new SubSeconds(ss);
 				}
 
-				//Coordinate
-
+				// Coordinates
 				Coordinate? coordinate = null;
 				if (parseCoordinate)
 				{
-					var lat = metadata.GetDouble(ExifToolTags.GPSLatitude);
-					var lon = metadata.GetDouble(ExifToolTags.GPSLongitude);
-					if (lat.HasValue && lon.HasValue)
-						coordinate = new Coordinate(
-							Math.Round(lat.Value, _coordinatePrecision),
-							Math.Round(lon.Value, _coordinatePrecision));
+					var lat = metadata.GetDouble(ExifToolTagsConstants.GPSLatitude);
+					var lon = metadata.GetDouble(ExifToolTagsConstants.GPSLongitude);
+					if (lat.HasValue && lon.HasValue) coordinate = new Coordinate(lat.Value, lon.Value);
 				}
 
-				//Identity
-				string? make = null;
-				string? model = null;
-				string? serialNumber = null;
-				if (parseMakeModel)
-				{
-					make = metadata.GetString(ExifToolTags.MyMake);
-					model = metadata.GetString(ExifToolTags.MyModel);
-					serialNumber = metadata.GetString(ExifToolTags.MySerialNumber);
-				}
+				// Identity & Conventions
+				string? make = parseMakeModel ? metadata.GetString(ExifToolTagsConstants.MyMake) : null;
+				string? model = parseMakeModel ? metadata.GetString(ExifToolTagsConstants.MyModel) : null;
+				string? serial = parseMakeModel ? metadata.GetString(ExifToolTagsConstants.MySerialNumber) : null;
+				string? originalFileName = parseOriginalFileName ? metadata.GetString(ExifToolTagsConstants.PreservedFileName) : null;
 
-				//Name Convention
-				string? MyFullFolderFileConvention = metadata.GetString(ExifToolTags.MyFullFolderFileConvention);
-				string? MyFolderConvention = metadata.GetString(ExifToolTags.MyFolderConvention);
-				string? MyFileNameConvention = metadata.GetString(ExifToolTags.MyFileNameConvention);
-
-
-				string? originalFileName = null;
-				if (parseOriginalFileName)
-				{
-					originalFileName = metadata.GetString(ExifToolTags.PreservedFileName);
-					//?? metadata.GetString(ExifToolTags.FileName);
-				}
-
-				// ⭐️ Modificar ExifData para aceptar DateTimeOffset? en lugar de DateTime? 
-				// (Asumo que ExifData ha sido actualizado)
-				return new ExifData(photoTaken, coordinate, _options.AddressSeparator, make, model, serialNumber, subSeconds, originalFileName, metadata);
+				return new ExifData(photoTaken, coordinate, _options.AddressSeparator, make, model, serial, subSeconds, originalFileName, metadata);
 			}
 			catch (Exception ex)
 			{
@@ -283,42 +169,25 @@ namespace PhotoCli.Core.Services.Implementations
 				return null;
 			}
 		}
-	}
 
-	public static class ExifToolExtensions
-	{
-		public static DateTime? GetDateTime(this IEnumerable<KeyValuePair<string, string>> metadata, string key)
+		private bool TryParseExifOffset(string? offsetString, out TimeSpan offset)
 		{
-			var kv = metadata.FirstOrDefault(k => string.Equals(k.Key, key, StringComparison.OrdinalIgnoreCase));
-			if (kv.Equals(default(KeyValuePair<string, string>)) || string.IsNullOrWhiteSpace(kv.Value))
-				return null;
+			offset = TimeSpan.Zero;
+			if (string.IsNullOrWhiteSpace(offsetString)) return false;
+			offsetString = offsetString.Trim();
 
-			// Intentamos analizar el formato Naive YYYY:MM:DD HH:mm:ss
-			if (DateTime.TryParseExact(kv.Value, "yyyy:MM:dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
-				return dt;
-
-			if (DateTime.TryParse(kv.Value, out dt))
-				return dt;
-
-			return null;
-		}
-
-		public static double? GetDouble(this IEnumerable<KeyValuePair<string, string>> metadata, string key)
-		{
-			var kv = metadata.FirstOrDefault(k => string.Equals(k.Key, key, StringComparison.OrdinalIgnoreCase));
-			if (kv.Equals(default(KeyValuePair<string, string>)) || string.IsNullOrWhiteSpace(kv.Value))
-				return null;
-
-			if (double.TryParse(kv.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-				return value;
-
-			return null;
-		}
-
-		public static string? GetString(this IEnumerable<KeyValuePair<string, string>> metadata, string key)
-		{
-			var kv = metadata.FirstOrDefault(k => string.Equals(k.Key, key, StringComparison.OrdinalIgnoreCase));
-			return kv.Equals(default(KeyValuePair<string, string>)) ? null : kv.Value;
+			if (offsetString.StartsWith("+") || offsetString.StartsWith("-"))
+			{
+				bool isNegative = offsetString.StartsWith("-");
+				string parts = offsetString.Substring(1);
+				if (!parts.Contains(":")) parts += ":00";
+				if (TimeSpan.TryParseExact(parts, new[] { @"h\:mm", @"hh\:mm", @"hh\:mm\:ss" }, CultureInfo.InvariantCulture, out offset))
+				{
+					if (isNegative) offset = offset.Negate();
+					return true;
+				}
+			}
+			return false;
 		}
 	}
 }
