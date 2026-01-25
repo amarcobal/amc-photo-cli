@@ -87,7 +87,7 @@ public class PhotoCollectorService : IPhotoCollectorService
 
 			// Actualización de estado de la búsqueda
 			_statistics.PhotosFound = filePaths.Length;
-			mainTask.UpdateDescription($"[green]✔ {TaskPhotoMainFilesName}:[/] [bold]{filePaths.Length}[/] photo(s) found. Starting collection...");
+			mainTask.UpdateDescription($"[green]✔[/] [green]{TaskPhotoMainFilesName}:[/] [bold]{filePaths.Length}[/] photo(s) found. Starting collection...");
 
 
 			var photosInternal = new List<Photo>();
@@ -136,7 +136,7 @@ public class PhotoCollectorService : IPhotoCollectorService
 				}
 
 				// Finalización de la tarea con resultados
-				mainTask.UpdateDescription($"[green]✔ {TaskPhotoCollectionName}:[/] [bold]{photosInternal.Count}[/] photos collected with [bold]{companionFileCount}[/] companion files.");
+				mainTask.UpdateDescription($"[green]✔ [/] [green]{TaskPhotoCollectionName}:[/] [bold]{photosInternal.Count}[/] photos collected with [bold]{companionFileCount}[/] companion files.");
 			}
 			else
 			{
@@ -156,7 +156,7 @@ public class PhotoCollectorService : IPhotoCollectorService
 					photosInternal.Add(photo);
 					mainTask.Increment(1);
 				}
-				mainTask.UpdateDescription($"[green]✔ {TaskPhotoCollectionName}:[/] [bold]{photosInternal.Count}[/] photos collected.");
+				mainTask.UpdateDescription($"[green]✔[/] [green]{TaskPhotoCollectionName}:[/] [bold]{photosInternal.Count}[/] photos collected.");
 			}
 
 			// --- ETAPA FINAL: Detener la Tarea Única ---

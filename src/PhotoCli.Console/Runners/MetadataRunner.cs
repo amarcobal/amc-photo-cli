@@ -316,11 +316,11 @@ public class MetadataRunner : BaseRunner, IConsoleRunner
 
 		if (passedFiles == totalFiles)
 		{
-			_consoleWriter.WriteMarkup($"[green]✅ All files passed validation.[/]");
+			_consoleWriter.WriteMarkup($"[green]✔ All files passed validation.[/]");
 			return;
 		}
 
-		_consoleWriter.WriteMarkup($"[green]✅ Passed:[/] {passedFiles}");
+		_consoleWriter.WriteMarkup($"[green]✔ Passed:[/] {passedFiles}");
 		_consoleWriter.WriteMarkup($"[red]🛑 Failed:[/] {failedFiles}");
 
 		if (failedByIdentity > 0 || failedByTemplate > 0)

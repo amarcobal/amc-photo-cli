@@ -481,7 +481,7 @@ public class MetadataService : IMetadataService
 			// !!! FIN DEL PROCESAMIENTO SECUENCIAL !!!
 			// -------------------------------------------------------------------------
 
-			task.UpdateDescription($"[green]✅ Completed Template:[/][bold cyan] {templateName}[/]");
+			task.UpdateDescription($"[green]✔ [/] [green]Completed Template:[/][bold cyan] {templateName}[/]");
 			task.Stop();
 
 			return finalValidationResults.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
@@ -1046,12 +1046,34 @@ public class MetadataService : IMetadataService
 
 			string status;
 
-			// NUEVA LÓGICA DE STATUS BASADA EN RUNSTATUS
+			// 1. Buscamos si hay algún tag que REALMENTE se va a sobrescribir
+			bool willPerformAnyUpdate = result.OverwriteDifferences.Any(d =>
+			{
+				if (!d.Value.Changed) return false;
+
+				// Buscamos la definición del tag para ver si tiene Overwrite granular
+				var tagDef = templateTags.FirstOrDefault(t => t.Name.Equals(d.Key, StringComparison.OrdinalIgnoreCase));
+				bool tagHasGranularOverwrite = tagDef?.Overwrite ?? false;
+
+				// Se sobrescribe si: Flag Global OR Flag Granular
+				return overwriteTags || tagHasGranularOverwrite;
+			});
+
+
 			switch (result.RunStatus)
 			{
 				case MetadataRunStatus.ReadyToWrite:
-					status = isDryRun ? "[bold green]🟢 WRITE[/]" : "[bold green]✔ WRITE[/]";
-					writtenUpdatedCount++;
+					// Si hay diferencias pero NINGUNA se va a escribir (todas protegidas) -> Es un KEPT
+					if (result.OverwriteDifferences.Any(d => d.Value.Changed) && !willPerformAnyUpdate)
+					{
+						status = isDryRun ? "[bold dim blue]🔵 KEPT (Protected)[/]" : "[bold dim blue]✔ KEPT[/]";
+						keptUnchangedCountFinal++;
+					}
+					else
+					{
+						status = isDryRun ? "[bold green]🟢 WRITE[/]" : "[bold green]✔ WRITE[/]";
+						writtenUpdatedCount++;
+					}
 					break;
 				case MetadataRunStatus.Kept:
 					status = isDryRun ? "[bold dim blue]🔵 KEPT[/]" : "[bold dim blue]✔ KEPT[/]";
@@ -1298,15 +1320,26 @@ public class MetadataService : IMetadataService
 			// Título de la sección
 			_consoleWriter.WriteMarkup("[bold yellow]⚠️ WARNINGS (PROCESSED WITH ATTENTION):[/]");
 
-
 			if (totalTagDifferencesFound > 0)
 			{
-				string actionMessage = overwriteTags
-					? $"value conflicts [dim](Overwritten)[/]"
-					: $"value conflicts [dim](Protected / Kept)[/]";
+				// Formateamos el flag con colores dinámicos
+				string flagName = "[yellow]--overwrite-tags[/]";
+				string flagStatus = overwriteTags
+					? "[bold green]ON[/]"
+					: "[bold red]OFF[/]";
 
-				_consoleWriter.WriteMarkup($"   • [red]Tag value differences found:[/][bold red] {totalTagDifferencesFound}[/] tags with {actionMessage}.");
-				_consoleWriter.WriteMarkup($"  [dim](Review the table for tags with 'Overwrite' or 'Differs / Kept' statuses)[/]");
+				string actionStatus = overwriteTags
+					? $"[green]Updated[/] (Global flag {flagName} is {flagStatus})"
+					: $"[blue]Protected / Kept[/] (Global flag {flagName} is {flagStatus})";
+
+				_consoleWriter.WriteMarkup($"    • [yellow]Tag value differences found:[/][bold] {totalTagDifferencesFound}[/] tags. Action: {actionStatus}.");
+
+				if (!overwriteTags)
+				{
+					_consoleWriter.WriteMarkup($"      [dim]Note: Individual tags with [white]'Overwrite: true'[/] in the template bypass the global {flagName}.[/]");
+				}
+
+				_consoleWriter.WriteMarkup("      [dim](Review the table for 'Differs / Kept' vs 'Updated' or 'Overwrite' statuses)[/]");
 			}
 
 			if (allowedUnknownWarnings > 0)
@@ -1350,7 +1383,7 @@ public class MetadataService : IMetadataService
 		// ************************************************************
 		if (runStatus == MetadataRunStatus.Kept || runStatus == MetadataRunStatus.SkippedIdentity)
 		{
-			valueColor = "dim blue";
+			valueColor = "dim";
 			labelColor = "dim blue";
 			statusLabel = runStatus == MetadataRunStatus.Kept ? "(Match / Kept)" : "(Skipped / Identity)";
 
@@ -1484,7 +1517,7 @@ public class MetadataService : IMetadataService
 				{
 					// Formato de Match/Kept
 					valueColor = "dim";
-					labelColor = "green";
+					labelColor = "dim blue";
 					statusLabel = "(Match / Kept)";
 					tagExecutionDetails[tag.Name] = (check.Value, valueColor, $"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]");
 				}

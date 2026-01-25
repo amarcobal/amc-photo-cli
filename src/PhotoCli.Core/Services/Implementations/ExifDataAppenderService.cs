@@ -64,7 +64,7 @@ public class ExifDataAppenderService : IExifDataAppenderService
 			}
 
 			// Limpiar la descripción al finalizar
-			task.UpdateDescription($"[green]✔ {TaskName}:[/] Completed parsing {photos.Count} photo(s).");
+			task.UpdateDescription($"[green]✔ [/] [green]{TaskName}:[/] Completed parsing {photos.Count} photo(s).");
 			task.Stop();
 
 			return (photos, photosAreValid, photosHasPhotoTaken, photosHasCoordinate);
@@ -130,7 +130,7 @@ public class ExifDataAppenderService : IExifDataAppenderService
 			}
 
 			// Limpiar la descripción al finalizar
-			task.UpdateDescription($"[green]✔ {TaskName}:[/] Completed parsing {photos.Count} photo(s).");
+			task.UpdateDescription($"[green]✔ [/] [green]{TaskName}:[/] Completed parsing {photos.Count} photo(s).");
 			task.Stop();
 
 			return (photos, photosAreValid, photosHasPhotoTaken, photosHasCoordinate, photosHasMakeModel, photosHasSubSeconds, photosHasOriginalFileName);

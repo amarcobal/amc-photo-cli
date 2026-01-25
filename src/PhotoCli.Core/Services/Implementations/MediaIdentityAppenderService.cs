@@ -84,7 +84,7 @@ public class MediaIdentityAppenderService : IMediaIdentityAppenderService
 			}
 
 			// CAMBIO 4: Limpiar la descripción al finalizar y detener la tarea.
-			task.UpdateDescription($"[green]✔ {TaskName}:[/] Completed processing {photos.Count} photo(s).");
+			task.UpdateDescription($"[green]✔ [/] [green]{TaskName}:[/] Completed processing {photos.Count} photo(s).");
 			task.Stop();
 
 			// Devolvemos la tupla con los resultados
