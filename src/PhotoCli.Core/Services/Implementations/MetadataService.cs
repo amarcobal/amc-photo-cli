@@ -84,24 +84,42 @@ public class MetadataService : IMetadataService
 		{ "Model", p => p.Model },
 		{ "OriginalSubseconds", p => p.HasSubSeconds ? p.Subseconds?.Padded() : Constants.MetadataNotSetValue },
 
-		// GEOLOCATION
-		{ "GPSLatitude", p => p.Coordinate != null ? Math.Abs(p.Coordinate.Latitude).ToString("R", CultureInfo.InvariantCulture) : null },
+		// GEOLOCATION - Se establece valor solo si existen coordenadas (No indicamos fecha/hora para evitar problemas de forzar posición en mapa al consumir en clientes)
+		{ "GPSLatitude", p => p.Coordinate != null
+			? Math.Abs(p.Coordinate.Latitude).ToString("R", CultureInfo.InvariantCulture)
+			: null },
 
-		{ "GPSLongitude", p => p.Coordinate != null ? Math.Abs(p.Coordinate.Longitude).ToString("R", CultureInfo.InvariantCulture) : null },
+		{ "GPSLongitude", p => p.Coordinate != null
+			? Math.Abs(p.Coordinate.Longitude).ToString("R", CultureInfo.InvariantCulture)
+			: null },
 
 		// Refs necesarios para EXIF (N, S, E, W)
-		{ "GPSLatitudeRef", p => p.Coordinate != null ? (p.Coordinate.Latitude >= 0 ? "N" : "S") : null },
-		{ "GPSLongitudeRef", p => p.Coordinate != null ? (p.Coordinate.Longitude >= 0 ? "E" : "W") : null },
+		{ "GPSLatitudeRef", p => p.Coordinate != null
+			? (p.Coordinate.Latitude >= 0 ? "N" : "S")
+			: null },
+
+		{ "GPSLongitudeRef", p => p.Coordinate != null
+			? (p.Coordinate.Longitude >= 0 ? "E" : "W")
+			: null },
 
 		// Formato compatible con ExifTool (Latitud, Longitud)
 		{ "GPSCoordinatesISO", p => p.Coordinate != null
-		? string.Format(CultureInfo.InvariantCulture, "{0:G} {1:G}", 
-			p.Coordinate.Latitude, p.Coordinate.Longitude)
-		: null },
+			? string.Format(CultureInfo.InvariantCulture, "{0:G} {1:G}",
+				p.Coordinate.Latitude, p.Coordinate.Longitude)
+			: null },
 
-		// Fechas formateadas para el bloque GPS de fotos
-		{ "OriginalDateUTC_GPS", p => p.OriginalDateTimeUTC?.ToString("yyyy:MM:dd") },
-		{ "OriginalTimeUTC_GPS", p => p.OriginalDateTimeUTC?.ToString("HH:mm:ss") },
+		// --- Las fechas GPS ahora dependen de la existencia de coordenadas ---
+		{ "GPSOriginalDateUTC", p => p.Coordinate != null
+			? p.OriginalDateTimeUTC?.ToString("yyyy:MM:dd")
+			: null },
+
+		{ "GPSOriginalTimeUTC", p => p.Coordinate != null
+			? p.OriginalDateTimeUTC?.ToString("HH:mm:ss")
+			: null },
+
+		{ "GPSOriginalDateTime", p => p.Coordinate != null
+			? p.OriginalDateTime?.ToString("yyyy:MM:dd HH:mm:sszzz")
+			: null },
 	};
 
 	public MetadataService(

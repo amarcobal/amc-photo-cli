@@ -319,7 +319,7 @@ Templates:
       AssetType: Photo
       Source: 
         Type: Variable
-        ValueKey: OriginalDateUTC_GPS
+        ValueKey: GPSOriginalDateUTC
         Overwrite: true
 
     - Name: GPS:GPSTimeStamp
@@ -327,7 +327,7 @@ Templates:
       AssetType: Photo
       Source: 
         Type: Variable
-        ValueKey: OriginalTimeUTC_GPS
+        ValueKey: GPSOriginalTimeUTC
       Overwrite: true
 
     # Sincronización XMP
@@ -335,7 +335,7 @@ Templates:
       Required: false
       Source:
         Type: Variable
-        ValueKey: OriginalDateTime
+        ValueKey: GPSOriginalDateTime
       Overwrite: true
 
     # Vídeos (QuickTime)

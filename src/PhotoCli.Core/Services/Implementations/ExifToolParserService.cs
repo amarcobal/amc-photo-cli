@@ -151,7 +151,20 @@ namespace PhotoCli.Core.Services.Implementations
 				{
 					var lat = metadata.GetDouble(ExifToolTagsConstants.GPSLatitude);
 					var lon = metadata.GetDouble(ExifToolTagsConstants.GPSLongitude);
-					if (lat.HasValue && lon.HasValue) coordinate = new Coordinate(lat.Value, lon.Value);
+					// 1. Comprobamos que ambos tengan valor (no sean nulos)
+					if (lat.HasValue && lon.HasValue)
+					{
+						// 2. Comprobamos que no sean el "Punto Cero" (0,0)
+						// Usamos un umbral pequeño para descartar errores de sensores viejos
+						if (Math.Abs(lat.Value) > 0.0001 || Math.Abs(lon.Value) > 0.0001)
+						{
+							coordinate = new Coordinate(lat.Value, lon.Value);
+						}
+						else
+						{
+							_logger.LogDebug("GPS coordinates (0,0) detected and ignored (Null Island).");
+						}
+					}
 				}
 
 				// Identity & Conventions
