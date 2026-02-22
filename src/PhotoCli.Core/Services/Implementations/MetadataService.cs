@@ -163,33 +163,22 @@ public class MetadataService : IMetadataService
 	bool overwriteTags,
 	bool allowUnknownIdentity)
 	{
-		// 1. Validar que el template base existe antes de empezar
 		if (!_templateTagMap.ContainsKey(templateName))
 		{
 			_logger.LogWarning("Template base '{Template}' no está definido en la configuración. Operación abortada.", templateName);
 			return new Dictionary<string, FileValidationResult>();
 		}
 
-		// Colecciones estándar (no concurrentes)
 		var finalValidationResults = new Dictionary<string, FileValidationResult>(StringComparer.OrdinalIgnoreCase);
 		var finalRunLogResults = new List<AddPreviewResult>();
-
-		// ⭐️ CORRECCIÓN DE ÁMBITO: Declarar identityDetails fuera del ExecuteProgress
 		var identityDetails = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-		// -------------------------------------------------------------------------
-		// CAMBIO CLAVE: Usar IProgressService para la barra de progreso
-		// -------------------------------------------------------------------------
 		var validationResults = _progressService.ExecuteProgress("Metadata Add/Check Process", ctx =>
 		{
 			var totalFiles = photos.Count;
 			var task = ctx.AddTask($"[yellow]Processing Template:[/][bold cyan]{templateName}[/]", maxValue: totalFiles);
-
 			var photosArray = photos.ToArray();
 
-			// -------------------------------------------------------------------------
-			// !!! INICIO DEL PROCESAMIENTO SECUENCIAL (FOREACH) !!!
-			// -------------------------------------------------------------------------
 			foreach (var photo in photosArray)
 			{
 				task.UpdateDescription($"[yellow]Processing Template:[/][bold cyan] {templateName}[/] - [dim]{photo.PhotoFile.FileName}[/]");
@@ -199,22 +188,10 @@ public class MetadataService : IMetadataService
 
 				if (!photoTemplateTags.Any())
 				{
-					_logger.LogTrace("Skipping file {File} because no tags were found for base template {Template} or specific type {Type}.",
-									photo.PhotoFile.FileNameWithExtension, templateName, photo.PhotoFile.Type);
-
+					_logger.LogTrace("Skipping file {File} because no tags were found...", photo.PhotoFile.FileNameWithExtension);
 					var skippedResult = new FileValidationResult { IdentityTags = new Dictionary<string, TagValidationResult>() };
 					finalValidationResults[fullPath] = skippedResult;
-
-					finalRunLogResults.Add(new AddPreviewResult(
-						fullPath,
-						false, // IdentityPassed
-						false, // TemplatePassed
-						new Dictionary<string, (string Value, string StatusColor, string DisplayText)>(),
-						new Dictionary<string, (string OriginalValue, string NewValue, bool Changed)>(),
-						skippedResult,
-						MetadataRunStatus.NotApplicable
-					));
-
+					finalRunLogResults.Add(new AddPreviewResult(fullPath, false, false, new Dictionary<string, (string, string, string)>(), new Dictionary<string, (string, string, bool)>(), skippedResult, MetadataRunStatus.NotApplicable));
 					task.Increment(1);
 					continue;
 				}
@@ -230,8 +207,6 @@ public class MetadataService : IMetadataService
 				var tagExecutionDetails = new Dictionary<string, (string Value, string StatusColor, string DisplayText)>();
 				var overwriteDiffs = new Dictionary<string, (string OriginalValue, string NewValue, bool Changed)>();
 
-
-				// 1. Validar Identidad
 				var (identityPassed, identityLog) = ValidateIdentityAndGenerateTags(photo, allowUnknownIdentity, identityCheckResults);
 				identityDetails[fullPath] = identityLog;
 
@@ -247,28 +222,17 @@ public class MetadataService : IMetadataService
 						if (resolvedValue == "CONFIG_ERROR")
 						{
 							templateError = true;
-							tagExecutionDetails[tag.Name] = ("Config Error", "red", "[bold white on red]CONFIG ERROR (Missing Prop Map)[/]");
+							tagExecutionDetails[tag.Name] = ("Config Error", "red", "[bold white on red]CONFIG ERROR[/]");
 							templateCheckResults[tag.Name] = new TagValidationResult(false, "CONFIG_ERROR", tag.Required, false);
 							continue;
 						}
 
-						// --- INICIO: LÓGICA DE VALOR FALTANTE / SENTINELA ---
-						bool isNotApplicable = resolvedValue?.Equals(Constants.MetadataNotSetValue, StringComparison.Ordinal) ?? false;
+						// --- INICIO: LÓGICA DE VALOR FALTANTE / SENTINELA (CORREGIDA) ---
+						bool isSentinel = resolvedValue?.Equals(Constants.MetadataNotSetValue, StringComparison.Ordinal) ?? false;
+						bool isActuallyEmpty = string.IsNullOrWhiteSpace(resolvedValue) && !isSentinel;
 
-						if (string.IsNullOrWhiteSpace(resolvedValue) || isNotApplicable)
+						if (isActuallyEmpty)
 						{
-							if (isNotApplicable)
-							{
-								// El valor es la constante de control. No es un error.
-								if (isDryRun)
-								{
-									tagExecutionDetails[tag.Name] = (Constants.MetadataNotSetValue, "dim", "[dim](Not Applicable / Not Written)[/]");
-									templateCheckResults[tag.Name] = new TagValidationResult(false, string.Empty, tag.Required, true);
-								}
-								continue;
-							}
-
-							// Si es realmente null/empty (y no es la constante de control)
 							if (tag.Required)
 							{
 								templateError = true;
@@ -278,26 +242,32 @@ public class MetadataService : IMetadataService
 							else if (isDryRun)
 							{
 								tagExecutionDetails[tag.Name] = ("(Empty)", "dim", "[dim](Empty)[/]");
-								templateCheckResults[tag.Name] = new TagValidationResult(false, string.Empty, tag.Required, true);
+								templateCheckResults[tag.Name] = new TagValidationResult(true, string.Empty, tag.Required, true);
 							}
 							continue;
 						}
 
+						if (isSentinel)
+						{
+							if (!tag.Required)
+							{
+								if (isDryRun)
+								{
+									tagExecutionDetails[tag.Name] = (Constants.MetadataNotSetValue, "dim", "[dim](Not Applicable / Not Written)[/]");
+									templateCheckResults[tag.Name] = new TagValidationResult(true, resolvedValue!, tag.Required, true);
+								}
+								continue;
+							}
+							// Si es REQUERIDO y es SENTINELA, NO hacemos continue.
+							// Lo dejamos pasar para que se incluya en tagsToWriteForPhoto.
+						}
 						// --- FIN: LÓGICA DE VALOR FALTANTE / SENTINELA ---
 
-						// Si llegamos aquí, resolvedValue es un valor real
 						if (isDryRun)
-							templateCheckResults[tag.Name] = new TagValidationResult(true, resolvedValue, tag.Required, true);
+							templateCheckResults[tag.Name] = new TagValidationResult(true, resolvedValue!, tag.Required, true);
 
-
-						// ====================================================================================
-						// INICIO DE LA CORRECCIÓN CLAVE PARA OBTENER EL VALOR ORIGINAL DE TAGS DE GRUPO (QuickTime)
-						// ====================================================================================
-
+						// --- LÓGICA DE DETECCIÓN DE VALOR EXISTENTE ---
 						string? existingVal = null;
-
-						// 1. Intentar leer el tag
-						// Determinar la clave de lectura: Prioriza ReadTag si no es nulo/vacío, si no, usa Name.
 						string readKey = string.IsNullOrWhiteSpace(tag.ReadTag) ? tag.Name : tag.ReadTag;
 						if (currentPhoto.ExifData?.Metadata.TryGetValue(readKey, out var val) == true && !string.IsNullOrWhiteSpace(val))
 						{
@@ -307,80 +277,33 @@ public class MetadataService : IMetadataService
 						bool tagExistsInFile = !string.IsNullOrWhiteSpace(existingVal);
 						bool valuesAreSame = tagExistsInFile && existingVal!.Equals(resolvedValue, StringComparison.OrdinalIgnoreCase);
 
-						// ====================================================================================
-						// FIN DE LA CORRECCIÓN CLAVE
-						// ====================================================================================
-
-						// --- INICIO: LÓGICA de shouldWrite ---
-						bool shouldWrite;
-
-						if (!tagExistsInFile)
-						{
-							shouldWrite = true; // Siempre escribimos tags nuevos.
-						}
-						else // Tag existe (ya sea por Name o por ReadTag)
-						{
-							// Condición de Sobrescritura: ¿Debe el valor nuevo reemplazar al existente?
-							// Esto es TRUE si: [Flag Global está ON] O [El Tag Granular está ON]
-							bool mustOverwrite = overwriteTags || tag.Overwrite;
-
-							if (mustOverwrite)
-							{
-								// Caso 2: El tag existe y se permite sobrescribir. Escribir solo si son diferentes.
-								shouldWrite = !valuesAreSame;
-							}
-							else
-							{
-								// Caso 3: El tag existe y NO se permite sobrescribir. Nunca escribimos (Kept).
-								shouldWrite = false;
-							}
-						}
-						// --- FIN: LÓGICA de shouldWrite ---
+						// --- LÓGICA de shouldWrite ---
+						bool shouldWrite = !tagExistsInFile || ((overwriteTags || tag.Overwrite) && !valuesAreSame);
 
 						if (shouldWrite)
 						{
 							string tagToWrite = string.IsNullOrWhiteSpace(tag.WriteTag) ? tag.Name : tag.WriteTag;
-
-							tagsToWriteForPhoto.Add(new KeyValuePair<string, string>(tagToWrite, resolvedValue));
+							tagsToWriteForPhoto.Add(new KeyValuePair<string, string>(tagToWrite, resolvedValue!));
 
 							if (isDryRun)
 							{
-								string statusColor;
-								string displayText;
-
-								// Sobrescritura (Old -> New)
 								if (tagExistsInFile)
 								{
-									// AHORA LLENAMOS CORRECTAMENTE EL DIFF CON EL VALOR ORIGINAL ENCONTRADO
-									overwriteDiffs[tag.Name] = (existingVal!.EscapeMarkup(), resolvedValue.EscapeMarkup(), true);
-
-									displayText = $"[bold]{existingVal.EscapeMarkup()}[/] → [yellow]{resolvedValue.EscapeMarkup()}[/]";
-									statusColor = "yellow";
+									overwriteDiffs[tag.Name] = (existingVal!.EscapeMarkup(), resolvedValue!.EscapeMarkup(), true);
+									tagExecutionDetails[tag.Name] = (resolvedValue!, "yellow", $"[bold]{existingVal.EscapeMarkup()}[/] → [yellow]{resolvedValue.EscapeMarkup()}[/]");
 								}
-								else // Nuevo (New)
+								else
 								{
-									displayText = $"[cyan]{resolvedValue.EscapeMarkup()}[/] (New)";
-									statusColor = "cyan";
+									string label = isSentinel ? "(New Placeholder / To Write)" : "(New / To Write)";
+									tagExecutionDetails[tag.Name] = (resolvedValue!, "cyan", $"[cyan]{resolvedValue!.EscapeMarkup()}[/] {label}");
 								}
-
-								tagExecutionDetails[tag.Name] = (resolvedValue, statusColor, displayText);
 							}
 						}
-						else
+						else if (isDryRun && tagExistsInFile)
 						{
-							// shouldWrite es FALSE (Tag existe y no hay que sobrescribir/no hay diferencia)
-							if (isDryRun && tagExistsInFile)
-							{
-								// CORRECCIÓN CLAVE PARA DETECCIÓN DE CONFLICTO (DIFFERS / KEPT)
-								bool hasDiff = !valuesAreSame;
-
-								// Llenamos overwriteDiffs.
-								overwriteDiffs[tag.Name] = (existingVal!.EscapeMarkup(), resolvedValue.EscapeMarkup(), hasDiff);
-
-								// Proporcionamos un placeholder de log temporal 
-								string logPlaceholder = hasDiff ? "(Conflict Kept)" : "(Match)";
-								tagExecutionDetails[tag.Name] = (existingVal!, "dim", logPlaceholder);
-							}
+							bool hasDiff = !valuesAreSame;
+							overwriteDiffs[tag.Name] = (existingVal!.EscapeMarkup(), resolvedValue!.EscapeMarkup(), hasDiff);
+							tagExecutionDetails[tag.Name] = (existingVal!, "dim", hasDiff ? "(Conflict Kept)" : "(Match)");
 						}
 					}
 
@@ -388,75 +311,31 @@ public class MetadataService : IMetadataService
 
 					if (templatePassed)
 					{
-						// 3. Ejecución Real y Refresco
 						writeSuccess = true;
-
 						if (!isDryRun && tagsToWriteForPhoto.Any())
 						{
 							(writeSuccess, var tempUpdatedPhoto) = WriteMetadataForPhoto(photo, tagsToWriteForPhoto, $"Template {templateName}");
-
-							if (writeSuccess && tempUpdatedPhoto != null)
-							{
-								currentPhoto = tempUpdatedPhoto;
-							}
-							else
-							{
-								writeSuccess = false;
-							}
+							if (writeSuccess && tempUpdatedPhoto != null) currentPhoto = tempUpdatedPhoto;
 						}
 
-						// 4. VALIDACIÓN FINAL Y LOG (Unificado)
 						if (!isDryRun)
 						{
-							// Revalidamos leyendo del archivo (o del objeto Photo actualizado)
 							(templatePassed, templateCheckResults) = RevalidateTemplateTags(currentPhoto, photoTemplateTags);
-
-							if (!writeSuccess && !isDryRun)
-							{
-								templatePassed = false;
-							}
+							if (!writeSuccess) templatePassed = false;
 						}
 
-						// Determinación del RunStatus antes de la recalcuación de detalles
-						if (!writeSuccess)
-						{
-							runStatus = MetadataRunStatus.FailedWrite;
-						}
-						else if (!templatePassed)
-						{
-							runStatus = MetadataRunStatus.FailedTemplate;
-						}
-						else // Pasó todo: ReadyToWrite o Kept
+						if (!writeSuccess) runStatus = MetadataRunStatus.FailedWrite;
+						else if (!templatePassed) runStatus = MetadataRunStatus.FailedTemplate;
+						else
 						{
 							bool hasChanges = tagsToWriteForPhoto.Any();
-							// Comprobamos si hubo *diferencias* que no se escribieron (protegidas) o que sí se escribieron (overwrite)
 							bool hadMeaningfulDiffs = overwriteDiffs.Any(d => d.Value.Changed);
-
-							if (hasChanges || hadMeaningfulDiffs)
-							{
-								// Si hay cambios a escribir, O hubo diferencias que se sobrescribieron
-								runStatus = MetadataRunStatus.ReadyToWrite;
-							}
-							else
-							{
-								// Si no hubo cambios a escribir (todos eran Match)
-								runStatus = MetadataRunStatus.Kept;
-							}
+							runStatus = (hasChanges || hadMeaningfulDiffs) ? MetadataRunStatus.ReadyToWrite : MetadataRunStatus.Kept;
 						}
 
-
-						RecalculateFinalTagExecutionDetails(
-							currentPhoto,
-							photoTemplateTags,
-							templateCheckResults,
-							tagExecutionDetails,
-							overwriteDiffs,
-							isDryRun,
-							overwriteTags,
-							runStatus);
-
+						RecalculateFinalTagExecutionDetails(currentPhoto, photoTemplateTags, templateCheckResults, tagExecutionDetails, overwriteDiffs, isDryRun, overwriteTags, runStatus);
 					}
-					else // !templatePassed (falló en la resolución inicial, ej. MISSING Required)
+					else
 					{
 						runStatus = MetadataRunStatus.FailedTemplate;
 					}
@@ -466,64 +345,19 @@ public class MetadataService : IMetadataService
 					runStatus = MetadataRunStatus.SkippedIdentity;
 				}
 
-				// 5. Almacenar resultados para el retorno
-				var finalTemplateCheck = templateCheckResults;
-
-				if (!identityPassed)
-				{
-					templatePassed = false;
-					finalTemplateCheck = new Dictionary<string, TagValidationResult>();
-				}
-
-				var validationResult = new FileValidationResult
-				{
-					IdentityTags = identityCheckResults,
-					TemplateTags = finalTemplateCheck
-				};
-
-				finalRunLogResults.Add(new AddPreviewResult(
-					fullPath,
-					identityPassed,
-					templatePassed,
-					tagExecutionDetails,
-					overwriteDiffs,
-					validationResult,
-					runStatus
-				));
-
+				var validationResult = new FileValidationResult { IdentityTags = identityCheckResults, TemplateTags = templateCheckResults };
+				finalRunLogResults.Add(new AddPreviewResult(fullPath, identityPassed, templatePassed, tagExecutionDetails, overwriteDiffs, validationResult, runStatus));
 				finalValidationResults[fullPath] = validationResult;
-
 				task.Increment(1);
 			}
-			// -------------------------------------------------------------------------
-			// !!! FIN DEL PROCESAMIENTO SECUENCIAL !!!
-			// -------------------------------------------------------------------------
 
 			task.UpdateDescription($"[green]✔ [/] [green]Completed Template:[/][bold cyan] {templateName}[/]");
 			task.Stop();
-
 			return finalValidationResults.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
 		});
 
-
-		// 5. Visualización de la Tabla y Resumen
 		var templateTagsBase = GetTemplateTags(templateName);
-
-		PrintAddPreviewTable(
-			photos,
-			templateTagsBase,
-			finalRunLogResults.ToList(),
-			// ⭐️ CORRECCIÓN: identityDetails ya está en ámbito y se pasa directamente.
-			identityDetails,
-			templateName,
-			overwriteTags,
-			0, // Recalculado
-			0, // Recalculado
-			0, // Recalculado
-			0, // Recalculado
-			allowUnknownIdentity,
-			isDryRun,
-			viewTypes);
+		PrintAddPreviewTable(photos, templateTagsBase, finalRunLogResults, identityDetails, templateName, overwriteTags, 0, 0, 0, 0, allowUnknownIdentity, isDryRun, viewTypes);
 
 		return validationResults;
 	}
@@ -1550,8 +1384,8 @@ public class MetadataService : IMetadataService
 			{
 				// Este es un valor intencional para tags requeridos que estaban vacíos.
 				valueColor = "dim";
-				labelColor = "yellow";
-				statusLabel = isDryRun ? "(New Placeholder)" : "(Written Placeholder)";
+				labelColor = "green";
+				statusLabel = isDryRun ? "(New Placeholder / To Write)" : "(Written Placeholder)";
 
 				// Construimos la salida: [NOT_SET] (New Placeholder)
 				tagExecutionDetails[tag.Name] = (
@@ -1562,25 +1396,33 @@ public class MetadataService : IMetadataService
 			}
 			else
 			{
-				// Este es un valor nuevo REAL (no un placeholder)
-				if (isDryRun)
+				// Si el valor está vacío de verdad, no deberíamos decir que se ha escrito algo "nuevo"
+				if (string.IsNullOrWhiteSpace(check.Value))
 				{
-					valueColor = "cyan";
-					labelColor = "yellow";
-					statusLabel = "(New / To Write)";
+					valueColor = "dim";
+					labelColor = "dim";
+					statusLabel = "(Empty / Skipped)";
+
+					tagExecutionDetails[tag.Name] = (check.Value, valueColor, $"[{labelColor}]{statusLabel}[/]");
 				}
 				else
 				{
-					valueColor = "green";
-					labelColor = "green";
-					statusLabel = "(Written)";
-				}
+					// Este es un valor nuevo REAL
+					if (isDryRun)
+					{
+						valueColor = "cyan";
+						labelColor = "yellow";
+						statusLabel = "(New / To Write)";
+					}
+					else
+					{
+						valueColor = "dim";
+						labelColor = "green";
+						statusLabel = "(Written)";
+					}
 
-				tagExecutionDetails[tag.Name] = (
-					check.Value,
-					valueColor,
-					$"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]"
-				);
+					tagExecutionDetails[tag.Name] = (check.Value, valueColor, $"[{valueColor}]{finalValueDisplay}[/] [{labelColor}]{statusLabel}[/]");
+				}
 			}
 		}
 	}
