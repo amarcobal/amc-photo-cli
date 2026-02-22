@@ -1,23 +1,68 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="_myTheme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Dark">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <MudText Typo="Typo.h5" Class="ml-3">📷 PhotoCli Dashboard</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.Brightness7 : Icons.Material.Filled.Brightness4)" Color="Color.Inherit" OnClick="@ToggleDarkMode" />
+    </MudAppBar>
 
-        <article class="content px-4">
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always">
+        <MudNavMenu>
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="px-4 py-2"><b>COMANDOS</b></MudText>
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+            <MudNavLink Href="/ingest" Icon="@Icons.Material.Filled.Input">Ingest</MudNavLink>
+            <MudNavLink Href="/archive" Icon="@Icons.Material.Filled.Archive">Archive</MudNavLink>
+            <MudNavLink Href="/copy" Icon="@Icons.Material.Filled.FileCopy">Copy</MudNavLink>
+            <MudNavLink Href="/commands/metadata" Icon="@Icons.Material.Filled.Info">Metadatos</MudNavLink>
+            <MudNavLink Href="/address" Icon="@Icons.Material.Filled.Map">Direcciones GPS</MudNavLink>
+
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="px-4 py-2"><b>SISTEMA</b></MudText>
+            <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">Configuración</MudNavLink>
+            <MudNavLink Href="/config/authors" Icon="@Icons.Material.Filled.LibraryBooks">Autores</MudNavLink>
+            <MudNavLink Href="/config/devices" Icon="@Icons.Material.Filled.LibraryBooks">Dispositivos</MudNavLink>
+            <MudNavLink Href="/config/templates" Icon="@Icons.Material.Filled.LibraryBooks">Plantillas Metadatos</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="pt-8 px-8 pb-16">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-6">
             @Body
-        </article>
-    </main>
-</div>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
 
-<div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="" class="reload">Reload</a>
-    <a class="dismiss">🗙</a>
-</div>
+@code {
+    bool _drawerOpen = true;
+    bool _isDarkMode = true; // Por defecto lo he puesto en Dark Mode que queda genial
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    void ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+    }
+
+    // Opcional: Personalizar los colores de tu marca
+    private MudTheme _myTheme = new MudTheme()
+        {
+            PaletteDark = new PaletteDark()
+            {
+                Primary = Colors.Indigo.Lighten1,
+                Background = Colors.Gray.Darken4,
+                Surface = Colors.Gray.Darken3,
+                AppbarBackground = Colors.Gray.Darken4
+            }
+        };
+}

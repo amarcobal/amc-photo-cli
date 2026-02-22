@@ -1,9 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using PhotoCli.Core.Models;
 using PhotoCli.Core.Models.Enums;
+using PhotoCli.Core.Options;
 using PhotoCli.Core.Utils.Extensions;
 
-namespace PhotoCli.Core.Options;
+namespace PhotoCli.Core.Models;
 
 public class ApiKeyStore
 {

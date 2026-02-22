@@ -31,6 +31,7 @@ using Spectre.Console;
 using PhotoCli.Core.Services.Implementations.SpectreConsole;
 using PhotoCli.Core.Services.Contracts.SpectreConsole;
 using PhotoCli.Core.Utils.Constants;
+using ApiKeyStore = PhotoCli.Console.Options.ApiKeyStore;
 
 namespace PhotoCli.Console;
 

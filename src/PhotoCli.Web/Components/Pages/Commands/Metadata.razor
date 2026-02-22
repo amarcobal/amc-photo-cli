@@ -1,0 +1,296 @@
+@page "/commands/metadata"
+@rendermode InteractiveServer
+@using PhotoCli.Core.Models.Enums
+@using PhotoCli.Core.Models
+@using PhotoCli.Core.Services.Contracts
+@using System.IO
+@using System.IO.Abstractions
+@using Microsoft.Extensions.Configuration
+@using YamlDotNet.Serialization
+@using PhotoCli.Web.Components.Pages.Config
+@inject IFileSystem FileSystem
+@inject IConfiguration Configuration
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+@* SERVICIOS REALES *@
+@inject IPhotoCollectorService PhotoCollectorService
+@inject IExifDataAppenderService ExifDataAppenderService
+@inject IMediaIdentityAppenderService MediaIdentityAppenderService
+@inject IMetadataService MetadataService
+@inject IMetadataConfigurationService MetadataConfigService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" GutterBottom="true" Color="Color.Primary">
+        <MudIcon Icon="@Icons.Material.Filled.AutoFixHigh" Class="mr-2" />
+        Launchpad de Metadatos
+    </MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="4" lg="3">
+            <MudCard Elevation="4" Class="mb-4 rounded-lg">
+                <MudCardHeader Style="background-color: rgba(63, 81, 181, 0.05);">
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6" Color="Color.Primary"><MudIcon Icon="@Icons.Material.Filled.RocketLaunch" Class="mr-2 mb-n1" /> Configuración</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudSelect T="Preset" Label="Cargar Predefinida" ValueChanged="ApplyPreset" ToStringFunc="@(p => p?.Name)" Variant="Variant.Outlined" Class="mb-6">
+                        <MudSelectItem Value="@(new Preset { Name = "Personalizado" })"><em>-- Personalizado --</em></MudSelectItem>
+                        @foreach (var preset in _presets)
+                        {
+                            <MudSelectItem Value="preset">@preset.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudTextField @bind-Value="_config.InputPath" Label="Ruta de Origen (-i)"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@Icons.Material.Filled.FolderOpen"
+                                  AdornmentColor="Color.Warning"
+                                  OnAdornmentClick="OpenFolderPicker"
+                                  Placeholder="Selecciona una carpeta..."
+                                  Class="mb-4" />
+
+                    <MudSelect T="MetadataOperation" @bind-Value="_config.Operation" Label="Operación" Variant="Variant.Outlined" Color="Color.Primary" Class="mb-4">
+                        <MudSelectItem Value="MetadataOperation.Check">Check (Verificar)</MudSelectItem>
+                        <MudSelectItem Value="MetadataOperation.Add">Add (Añadir)</MudSelectItem>
+                        <MudSelectItem Value="MetadataOperation.Get">Get (Leer)</MudSelectItem>
+                        <MudSelectItem Value="MetadataOperation.Delete">Delete (Eliminar)</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string" @bind-Value="_config.Template" Label="Plantilla (--template)" Variant="Variant.Outlined">
+                        @if (!_availableTemplates.Any())
+                        {
+                            <MudSelectItem Value="@("AMC-Basic-Metadata")">AMC-Basic-Metadata</MudSelectItem>
+                        }
+                        @foreach (var tpl in _availableTemplates)
+                        {
+                            <MudSelectItem Value="tpl">@tpl</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <div class="mt-6 pa-4 rounded" style="background-color: #1e1e1e; border-left: 4px solid #3f51b5;">
+                        <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-3">Flags de Ejecución</MudText>
+                        <MudSwitch T="bool" @bind-Value="_config.IsDryRun" Label="Simulación (-d)" Color="Color.Warning" Disabled="@(_config.Operation == MetadataOperation.Get || _config.Operation == MetadataOperation.Check)" />
+                        <MudSwitch T="bool" @bind-Value="_config.AllowUnknownIdentity" Label="Permitir Identidad Desconocida" Color="Color.Info" Disabled="@(_config.Operation == MetadataOperation.Get || _config.Operation == MetadataOperation.Delete)" />
+                        <MudSwitch T="bool" @bind-Value="_config.OverwriteTags" Label="Sobreescribir Etiquetas" Color="Color.Error" Disabled="@(_config.Operation != MetadataOperation.Add)" />
+                    </div>
+                </MudCardContent>
+                <MudCardActions Class="pa-4 justify-center">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="ExecuteCommand" Disabled="_isRunning" FullWidth="true" Style="height: 60px; font-weight: bold;">
+                        @(_isRunning ? "PROCESANDO..." : "EJECUTAR COMANDO")
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="8" lg="9">
+            <MudCard Elevation="4" Style="height: 100%; display: flex; flex-direction: column;" Class="rounded-lg">
+                <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-0" Color="Color.Dark" Style="flex-grow: 1;">
+
+                    <MudTabPanel Text="Resultados Detallados" Icon="@Icons.Material.Filled.TableChart">
+                        <MudTable Items="@_uiResults" Dense="true" Hover="true" Elevation="0" Style="height: 650px; overflow-y: auto;">
+                            <HeaderContent>
+                                <MudTh></MudTh>
+                                <MudTh>Archivo</MudTh>
+                                <MudTh>Status Final</MudTh>
+                                <MudTh>Identidad</MudTh>
+                                <MudTh>Plantilla</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd><MudIconButton Icon="@(context.ShowDetails ? Icons.Material.Filled.KeyboardArrowUp : Icons.Material.Filled.KeyboardArrowDown)" Color="Color.Info" Size="Size.Small" OnClick="@(() => context.ShowDetails = !context.ShowDetails)" /></MudTd>
+                                <MudTd><b>@context.FileName</b></MudTd>
+                                <MudTd>
+                                    <MudChip T="string" Size="Size.Small" Color="@(context.IdentityPassed && context.TemplatePassed ? Color.Success : Color.Error)" Variant="Variant.Filled">
+                                        @(context.IdentityPassed && context.TemplatePassed ? "OK" : "FAILED")
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd><MudIcon Icon="@(context.IdentityPassed ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)" Color="@(context.IdentityPassed ? Color.Success : Color.Error)" Size="Size.Small" /></MudTd>
+                                <MudTd><MudIcon Icon="@(context.TemplatePassed ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)" Color="@(context.TemplatePassed ? Color.Success : Color.Error)" Size="Size.Small" /></MudTd>
+                            </RowTemplate>
+                            <ChildRowContent>
+                                @if (context.ShowDetails)
+                                {
+                                    <MudTr>
+                                        <td colspan="5" style="padding: 16px; background-color: #242424; border-left: 4px solid #3f51b5;">
+                                            <MudGrid>
+                                                <MudItem xs="12" md="5">
+                                                    <MudText Typo="Typo.subtitle2" Class="mb-2" Color="Color.Primary">Identidad</MudText>
+                                                    <MudSimpleTable Dense="true" Style="background: transparent;">
+                                                        <tbody>
+                                                            @foreach (var id in context.IdentityChecks)
+                                                            {
+                                                                <tr>
+                                                                    <td><MudIcon Icon="@(id.IsValid ? Icons.Material.Filled.Check : Icons.Material.Filled.Close)" Color="@(id.IsValid ? Color.Success : Color.Error)" Size="Size.Small" /></td>
+                                                                    <td>@id.Name</td>
+                                                                    <td><b>@id.Value</b></td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </MudSimpleTable>
+                                                </MudItem>
+                                                <MudItem xs="12" md="7">
+                                                    <MudText Typo="Typo.subtitle2" Class="mb-2" Color="Color.Secondary">Etiquetas (Tags)</MudText>
+                                                    <MudSimpleTable Dense="true" Style="background: transparent;">
+                                                        <tbody>
+                                                            @foreach (var tag in context.TagDetails)
+                                                            {
+                                                                <tr>
+                                                                    <td><b>@tag.TagName</b></td>
+                                                                    <td><MudChip T="string" Size="Size.Small" Color="@tag.StatusColor" Variant="Variant.Text">@tag.StatusLabel</MudChip></td>
+                                                                    <td><span style="color: #4caf50; font-weight: bold;">@tag.NewValue</span></td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </MudSimpleTable>
+                                                </MudItem>
+                                            </MudGrid>
+                                        </td>
+                                    </MudTr>
+                                }
+                            </ChildRowContent>
+                        </MudTable>
+                    </MudTabPanel>
+                    <MudTabPanel Text="Consola Raw" Icon="@Icons.Material.Filled.Terminal">
+                        <div style="background-color: #0c0c0c; height: 650px; overflow-y: auto; padding: 16px; font-family: 'Consolas', monospace; color: #cccccc; font-size: 0.85rem;">
+                            @foreach (var log in _logs)
+                            {
+                                <div>@((MarkupString)log)</div>
+                            }
+                        </div>
+                    </MudTabPanel>
+                </MudTabs>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    public class CommandConfig
+    {
+        public string InputPath { get; set; } = "";
+        public MetadataOperation Operation { get; set; } = MetadataOperation.Check;
+        public string Template { get; set; } = "AMC-Basic-Metadata";
+        public bool IsDryRun { get; set; }
+        public bool AllowUnknownIdentity { get; set; }
+        public bool OverwriteTags { get; set; }
+    }
+    public class Preset { public string Name { get; set; } = ""; public CommandConfig Config { get; set; } = new(); }
+    public class IdentityCheckMock { public string Name { get; set; } = ""; public string Value { get; set; } = ""; public bool IsValid { get; set; } }
+    public class TagDetailMock { public string TagName { get; set; } = ""; public string NewValue { get; set; } = ""; public string StatusLabel { get; set; } = ""; public Color StatusColor { get; set; } }
+    public class UIAddPreviewResult
+    {
+        public string FileName { get; set; } = "";
+        public bool IdentityPassed { get; set; }
+        public bool TemplatePassed { get; set; }
+        public bool ShowDetails { get; set; } = false;
+        public List<IdentityCheckMock> IdentityChecks { get; set; } = new();
+        public List<TagDetailMock> TagDetails { get; set; } = new();
+    }
+
+    private CommandConfig _config = new();
+    private bool _isRunning = false;
+    private List<string> _logs = new();
+    private List<Preset> _presets = new();
+    private List<string> _availableTemplates = new();
+    private List<UIAddPreviewResult> _uiResults = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var templateMap = MetadataConfigService.GetTemplateMap();
+            _availableTemplates = templateMap.Keys.ToList();
+        }
+        catch { _availableTemplates = new(); }
+
+        _presets = new List<Preset> {
+            new Preset { Name = "1.1 Check (Template)", Config = new CommandConfig { Operation = MetadataOperation.Check } },
+            new Preset { Name = "3.1 Add (DryRun)", Config = new CommandConfig { Operation = MetadataOperation.Add, IsDryRun = true } }
+        };
+
+        if (_availableTemplates.Any()) _config.Template = _availableTemplates.First();
+    }
+
+    private void ApplyPreset(Preset preset)
+    {
+        if (preset.Name == "Personalizado") return;
+        _config.InputPath = preset.Config.InputPath;
+        _config.Operation = preset.Config.Operation;
+        _config.IsDryRun = preset.Config.IsDryRun;
+        _config.AllowUnknownIdentity = preset.Config.AllowUnknownIdentity;
+        _config.OverwriteTags = preset.Config.OverwriteTags;
+        if (!string.IsNullOrEmpty(preset.Config.Template)) _config.Template = preset.Config.Template;
+    }
+
+    private async Task OpenFolderPicker()
+    {
+        var parameters = new DialogParameters { ["CurrentPath"] = _config.InputPath };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+
+        // CORRECCIÓN V9: Uso de ShowAsync
+        var dialog = await DialogService.ShowAsync<FolderPicker>("Seleccionar Carpeta", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            _config.InputPath = result.Data?.ToString() ?? "";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExecuteCommand()
+    {
+        if (string.IsNullOrWhiteSpace(_config.InputPath)) { Snackbar.Add("Ruta obligatoria", Severity.Error); return; }
+        _isRunning = true;
+        _logs.Clear();
+        _uiResults.Clear();
+        AddLog($"> Iniciando {_config.Operation} en {_config.InputPath}");
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                var photos = PhotoCollectorService.Collect(_config.InputPath, allDirectories: false, searchCompanionFiles: true);
+                if (photos == null || !photos.Any()) { AddLog("Sin fotos."); return; }
+
+                photos = ExifDataAppenderService.ExtractExifData(photos, out _, out _, out _, out _, out _, out _);
+                photos = MediaIdentityAppenderService.AppendMediaIdentity(photos, out _, out _, out _);
+
+                var viewTypes = new List<MetadataCheckViewType> { MetadataCheckViewType.TemplateDetails, MetadataCheckViewType.IdentityDetails }.AsReadOnly();
+                IReadOnlyDictionary<string, FileValidationResult> results;
+
+                if (_config.Operation == MetadataOperation.Add)
+                    results = MetadataService.AddMetadataFromTemplate(photos, _config.Template, viewTypes, _config.IsDryRun, _config.OverwriteTags, _config.AllowUnknownIdentity);
+                else
+                    results = MetadataService.CheckMetadataFromTemplate(photos, _config.Template, viewTypes, _config.AllowUnknownIdentity);
+
+                foreach (var res in results)
+                {
+                    _uiResults.Add(new UIAddPreviewResult
+                        {
+                            FileName = Path.GetFileName(res.Key),
+                            IdentityPassed = res.Value.IdentityTags.Values.All(x => x.IsValid),
+                            TemplatePassed = res.Value.TemplateTags.Values.All(x => x.IsValid),
+                            IdentityChecks = res.Value.IdentityTags.Select(it => new IdentityCheckMock { Name = it.Key, Value = it.Value.Value ?? "N/A", IsValid = it.Value.IsValid }).ToList(),
+                            TagDetails = res.Value.TemplateTags.Select(tt => new TagDetailMock { TagName = tt.Key, NewValue = tt.Value.Value, StatusLabel = tt.Value.IsValid ? "OK" : "Error", StatusColor = tt.Value.IsValid ? Color.Success : Color.Error }).ToList()
+                        });
+                }
+                InvokeAsync(() => { AddLog("Finalizado."); StateHasChanged(); });
+            });
+        }
+        catch (Exception ex) { AddLog($"ERROR: {ex.Message}"); }
+        finally
+        {
+            _isRunning = false;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void AddLog(string msg) => InvokeAsync(() =>
+    {
+        _logs.Add($"[{DateTime.Now:HH:mm:ss}] {msg}");
+        StateHasChanged();
+    });
+}

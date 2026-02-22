@@ -1,0 +1,76 @@
+@using System.IO.Abstractions
+@using MudBlazor
+@using System.IO
+@inject IFileSystem FileSystem
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Folder" Class="mr-3 mb-n1" /> Navegador del Servidor
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <div style="max-height: 400px; overflow-y: auto;">
+            <MudList T="string" Clickable="true" SelectedValue="CurrentPath">
+                @if (!string.IsNullOrEmpty(ParentPath))
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.ArrowUpward" OnClick="@(() => NavigateTo(ParentPath))" Text=".. (Subir nivel)" />
+                }
+                @foreach (var dir in _directories)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Folder" OnClick="@(() => NavigateTo(dir))" Text="@Path.GetFileName(dir)" />
+                }
+            </MudList>
+        </div>
+        <MudTextField @bind-Value="CurrentPath" Label="Ruta Seleccionada" Variant="Variant.Text" ReadOnly="true" FullWidth="true" Class="mt-4" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">Seleccionar Carpeta</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    // En la v9, se sigue usando MudDialogInstance pero asegúrate de que el @using MudBlazor esté arriba.
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public string CurrentPath { get; set; } = "";
+
+    private List<string> _directories = new();
+
+    private string? ParentPath => string.IsNullOrEmpty(CurrentPath) ? null : Path.GetDirectoryName(CurrentPath);
+
+    protected override void OnInitialized()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentPath))
+            CurrentPath = Directory.GetCurrentDirectory();
+
+        LoadDirectories();
+    }
+
+    private void LoadDirectories()
+    {
+        try
+        {
+            _directories = FileSystem.Directory.GetDirectories(CurrentPath).OrderBy(d => d).ToList();
+        }
+        catch
+        {
+            _directories = new();
+        }
+    }
+
+    private void NavigateTo(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        CurrentPath = path;
+        LoadDirectories();
+    }
+
+    // En MudBlazor v9, DialogResult.Ok() se mantiene igual
+    private void Submit() => MudDialog.Close(DialogResult.Ok(CurrentPath));
+
+    private void Cancel() => MudDialog.Cancel();
+}

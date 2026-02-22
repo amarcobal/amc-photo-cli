@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using PhotoCli.Core.Models;
 using PhotoCli.Core.Models.ReverseGeocode;
 using PhotoCli.Core.Models.ReverseGeocode.OpenStreetMap;
 using PhotoCli.Core.Options;
