@@ -1,0 +1,472 @@
+Templates:
+  AMC-Basic-Metadata:
+    
+    ############################################################
+    # 1. IDENTITY (Who/What created the content)
+    ############################################################
+
+    # --- Author (The person) ---
+    - Name: XMP-AMC:IdentityAuthorID
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: AuthorID
+
+    - Name: XMP-AMC:IdentityAuthorAlias
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: AuthorAlias
+
+    - Name: XMP-AMC:IdentityAuthorName
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: AuthorName
+
+    # --- Device (The hardware) ---
+    - Name: XMP-AMC:IdentityDeviceID
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: DeviceID
+
+    - Name: XMP-AMC:IdentityDeviceAlias
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: DeviceAlias
+
+    - Name: XMP-AMC:IdentityDeviceName
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: DeviceName
+
+    - Name: XMP-AMC:IdentityDeviceSerialNumber
+      Required: false
+      Source:
+        Type: Variable
+        ValueKey: DeviceSerialNumber
+        
+    ############################################################
+    # 2. ORIGIN (The immutable "backup" of the original state)
+    ############################################################
+
+    - Name: XMP-AMC:OriginOriginalFileName
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: OriginalFileName
+
+    - Name: XMP-AMC:OriginOriginalDateTime
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: OriginalDateTime
+
+    - Name: XMP-AMC:OriginOriginalDateTimeLocal
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: OriginalDateTimeLocal
+
+    - Name: XMP-AMC:OriginOriginalDateTimeUTC
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC
+
+    - Name: XMP-AMC:OriginOriginalTimeZoneOffset
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: OriginalTimeZoneOffset
+
+    - Name: XMP-AMC:OriginOriginalSubseconds
+      Required: true
+      Source:
+        Type: Variable
+        ValueKey: OriginalSubseconds
+        
+    ############################################################
+    # 3. STANDARD TAGS SYNC (Industry Compatibility)
+    ############################################################
+
+    # --- 3.1 PHOTO PERSISTENCE (EXIF Standard) ---
+
+    # Synology: Exif.Photo.DateTimeOriginal (El más importante)
+    - Name: ExifIFD:DateTimeOriginal
+      Required: true
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeLocal
+
+    # Synology: Exif.Photo.DateTimeDigitized
+    - Name: ExifIFD:CreateDate
+      Required: true
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeLocal
+
+    # Synology: Exif.Image.DateTime (Directorio Raíz IFD0)
+    - Name: IFD0:ModifyDate
+      Required: true
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeLocal
+
+    # --- 3.2 VIDEO PERSISTENCE (Multi-Layer Compatibility) ---
+
+    # LAYER A: Modern Visuals (Local + Offset) - Google/Apple/Synology Priority
+    # Este tag "Keys:CreationDate" equivale al "com.apple.quicktime.creationdate" del blog de Synology.
+    - Name: Keys:CreationDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    - Name: ItemList:ContentCreateDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    # LAYER B: Legacy Fallback
+    - Name: UserData:DateTimeOriginal
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    # LAYER C: ISO Standard (Strict UTC)
+    - Name: QuickTime:CreateDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ # Ej: 2024:04:22 15:53:18
+      Overwrite: true
+
+    - Name: QuickTime:ModifyDate
+      Required: true
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ
+      Overwrite: true
+
+    # Media & Track Sync (UTC)
+    - Name: QuickTime:MediaCreateDate
+      Required: true
+      AssetType: Video
+      WriteTag: QuickTime:MediaCreateDate
+      ReadTag: Composite:MyMediaCreateDate
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ
+      Overwrite: true
+
+    - Name: QuickTime:TrackCreateDate
+      Required: true
+      AssetType: Video
+      WriteTag: QuickTime:TrackCreateDate
+      ReadTag: Composite:MyTrackCreateDate
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ
+      Overwrite: true
+
+    - Name: QuickTime:MediaModifyDate
+      Required: true
+      AssetType: Video
+      WriteTag: QuickTime:MediaModifyDate
+      ReadTag: Composite:MyMediaModifyDate
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ
+      Overwrite: true
+
+    - Name: QuickTime:TrackModifyDate
+      Required: true
+      AssetType: Video
+      WriteTag: QuickTime:TrackModifyDate
+      ReadTag: Composite:MyTrackModifyDate
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ
+      Overwrite: true
+
+    # --- 3.3 XMP STANDARDS (Global Sync & Synology Special Tags) ---
+
+    - Name: XMP-exif:DateTimeOriginal
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    - Name: XMP-xmp:CreateDate
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    - Name: XMP-xmp:ModifyDate
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime
+      Overwrite: true
+
+    # Requisito Synology: "All videos" (Requiere .config para definir XMP-video:DateUTC)
+    - Name: XMP-video:DateUTC
+      Required: true
+      AssetType: Video
+      Source:
+        Type: Variable
+        ValueKey: OriginalDateTimeUTC_NoZ
+      Overwrite: true
+
+    # --- 3.4 TIMEZONE & OFFSETS ---
+
+    # Offsets para Fotos (EXIF)
+    - Name: ExifIFD:OffsetTimeOriginal
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalTimeZoneOffset  # Ej: "+02:00"
+
+    - Name: ExifIFD:OffsetTime
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalTimeZoneOffset
+
+    - Name: ExifIFD:OffsetTimeDigitized
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: OriginalTimeZoneOffset
+        
+    # --- 3.5 UNIVERSAL SYNC ---
+    
+    - Name: XMP-dc:Creator
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorName
+
+    - Name: IFD0:Artist
+      Required: true
+      AssetType: Photo
+      Source:
+        Type: Variable
+        ValueKey: AuthorName
+
+    - Name: XMP-xmpMM:PreservedFileName
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalFileName
+
+    # --- 3.6 GEOLOCATION & GPS SYNC ---
+
+    # Fotos (EXIF)
+    - Name: GPS:GPSLatitude
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSLatitude
+
+    - Name: GPS:GPSLatitudeRef
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSLatitudeRef
+
+    - Name: GPS:GPSLongitude
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSLongitude
+
+    - Name: GPS:GPSLongitudeRef
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSLongitudeRef
+
+    - Name: GPS:GPSDateStamp
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSOriginalDateUTC
+        Overwrite: true
+
+    - Name: GPS:GPSTimeStamp
+      Required: false
+      AssetType: Photo
+      Source: 
+        Type: Variable
+        ValueKey: GPSOriginalTimeUTC
+      Overwrite: true
+
+    # Sincronización XMP
+    - Name: XMP-exif:GPSDateTime
+      Required: false
+      Source:
+        Type: Variable
+        ValueKey: GPSOriginalDateTime
+      Overwrite: true
+
+    # Vídeos (QuickTime)
+    - Name: Keys:GPSCoordinates
+      Required: false
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: GPSCoordinatesISO
+      Overwrite: true
+
+    - Name: UserData:GPSCoordinates
+      Required: false
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: GPSCoordinatesISO
+      Overwrite: true
+
+    - Name: ItemList:GPSCoordinates
+      Required: false
+      AssetType: Video
+      Source: 
+        Type: Variable
+        ValueKey: GPSCoordinatesISO
+      Overwrite: true
+
+  AMC-WOF-Ingest:
+    
+    ############################################################
+    # 1. IDENTITY (Who/What created the content)
+    ############################################################
+
+    # --- Author (The person) ---
+    - Name: XMP-AMC:IdentityAuthorID
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorID 
+
+    - Name: XMP-AMC:IdentityAuthorAlias
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorAlias
+
+    - Name: XMP-AMC:IdentityAuthorName
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorName
+
+    # --- Device (The hardware) ---
+    - Name: XMP-AMC:IdentityDeviceID
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: DeviceID
+
+    - Name: XMP-AMC:IdentityDeviceAlias
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: DeviceAlias
+
+    - Name: XMP-AMC:IdentityDeviceName
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: DeviceName
+        
+    ############################################################
+    # 2. ORIGIN (The immutable "backup" of the original state)
+    ############################################################
+    
+    - Name: XMP-AMC:OriginOriginalFileName
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalFileName 
+
+    - Name: XMP-AMC:OriginOriginalDateTime
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalDateTime 
+
+    - Name: XMP-AMC:OriginOriginalSubseconds
+      Required: false
+      Source: 
+        Type: Variable
+        ValueKey: OriginalSubseconds
+
+    ############################################################
+    # 3. WORKFLOW (What processing has been applied)
+    ############################################################
+
+    - Name: XMP-AMC:WorkflowIngestDerivedFileName
+      Required: false
+      Source: 
+        Type: Variable
+        ValueKey: DerivedFileName
+
+    - Name: XMP-AMC:WorkflowIngestDerivedFolderPath
+      Required: false
+      Source: 
+        Type: Variable
+        ValueKey: DerivedFolderPath
+
+    ############################################################
+    # 4. EVENT (What the content is about)
+    ############################################################
+    - Name: XMP-AMC:EventName
+      Required: false
+      Source: 
+        Type: Variable
+        ValueKey: MyAlbum 
+        
+    ############################################################
+    # 5. STANDARD TAGS SYNC (Industry Compatibility)
+    ############################################################
+    
+    # --- Standard Author ---
+    - Name: XMP-dc:Creator
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: AuthorName
+
+    - Name: XMP-xmpMM:PreservedFileName
+      Required: true
+      Source: 
+        Type: Variable
+        ValueKey: OriginalFileName

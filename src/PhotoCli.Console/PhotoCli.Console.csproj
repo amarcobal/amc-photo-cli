@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<AssemblyName>photo-cli</AssemblyName>
+		<Authors>Alp Coker</Authors>
+		<RepositoryUrl>https://github.com/photo-cli/photo-cli</RepositoryUrl>
+		<Company>photo-cli</Company>
+		<Product>photo-cli</Product>
+		<RollForward>LatestMajor</RollForward>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<PackAsTool>true</PackAsTool>
+		<PackageId>photo-cli</PackageId>
+		<ToolCommandName>photo-cli</ToolCommandName>
+		<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+		<PackageIcon>icon.png</PackageIcon>
+		<PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CommandLineParser" Version="2.9.1" />
+		<PackageReference Include="Spectre.Console" Version="0.54.0" />
+		<PackageReference Include="Spectre.Console.Cli" Version="0.53.0" />
+		<PackageReference Include="System.IO.Abstractions" Version="21.0.2" />
+		<PackageReference Include="FluentValidation" Version="11.9.0" />
+
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.3.0" />
+		<PackageReference Include="Polly" Version="8.3.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="appsettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Include="..\..\docs\assets\nuget-readme.md" Pack="true" PackagePath="\" />
+		<None Include="..\..\docs\assets\icon.png" Pack="true" PackagePath="\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\PhotoCli.Core\PhotoCli.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<RuntimeHostConfigurationOption Include="rollForward" Value="LatestMajor" />
+	</ItemGroup>
+
+</Project>

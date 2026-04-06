@@ -4,6 +4,7 @@ public class CopyRunnerUnitTests
 {
 	private readonly Mock<IPhotoCollectorService> _photoCollectorMock = new(MockBehavior.Strict);
 	private readonly Mock<IExifDataAppenderService> _exifDataAppenderMock = new(MockBehavior.Strict);
+	private readonly Mock<IMediaIdentityAppenderService> _mediaIdentityAppenderMock = new(MockBehavior.Strict);
 	private readonly Mock<IDirectoryGrouperService> _directoryGrouperMock = new(MockBehavior.Strict);
 	private readonly Mock<IFileNamerService> _fileNamerMock = new(MockBehavior.Strict);
 	private readonly Mock<IFileService> _fileServiceMock = new(MockBehavior.Strict);
@@ -83,11 +84,11 @@ public class CopyRunnerUnitTests
 		}
 
 		_directoryGrouperMock.Setup(s => s.GroupFiles(photos, copyOptions.InputPath!,
-				It.IsAny<FolderProcessType>(), It.IsAny<GroupByFolderType?>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()))
+				It.IsAny<FolderProcessType>(), It.IsAny<GroupByFolderType?>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()))
 			.Returns(() => groupedPhotoInfosByRelativeDirectory);
 
 		_organizeByNoPhotoTakenActionMock.Setup(s => s.FilterAndSortByNoActionTypes(photos,
-				It.IsAny<CopyInvalidFormatAction>(), It.IsAny<CopyNoPhotoTakenDateAction>(), It.IsAny<CopyNoCoordinateAction>(), It.IsAny<string>()))
+				It.IsAny<CopyInvalidFormatAction>(), It.IsAny<CopyNoPhotoTakenDateAction>(), It.IsAny<CopyNoCoordinateAction>(), It.IsAny<CopyNoDeviceAction>(), It.IsAny<CopyNoAuthorAction>(), It.IsAny<string>()))
 			.Returns(() => (photos, new List<Photo>()));
 
 		_fileNamerMock.Setup(s => s.SetFileName(photos, It.IsAny<NamingStyle>(), It.IsAny<NumberNamingTextStyle>()))
@@ -125,12 +126,12 @@ public class CopyRunnerUnitTests
 		}
 
 		_directoryGrouperMock.Verify(v => v.GroupFiles(photos, copyOptions.InputPath!,
-			It.IsAny<FolderProcessType>(), It.IsAny<GroupByFolderType?>(),It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once);
+			It.IsAny<FolderProcessType>(), It.IsAny<GroupByFolderType?>(),It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once);
 
 		var timesGroupPhotoFolderIteration = Times.Exactly(groupedPhotoInfosByRelativeDirectory.Count);
 
 		_organizeByNoPhotoTakenActionMock.Verify(v => v.FilterAndSortByNoActionTypes(photos,
-			It.IsAny<CopyInvalidFormatAction>(), It.IsAny<CopyNoPhotoTakenDateAction>(), It.IsAny<CopyNoCoordinateAction>(), It.IsAny<string>())
+			It.IsAny<CopyInvalidFormatAction>(), It.IsAny<CopyNoPhotoTakenDateAction>(), It.IsAny<CopyNoCoordinateAction>(), It.IsAny<CopyNoDeviceAction>(), It.IsAny<CopyNoAuthorAction>(), It.IsAny<string>())
 			, timesGroupPhotoFolderIteration);
 
 		_fileNamerMock.Verify(v => v.SetFileName(photos, It.IsAny<NamingStyle>(), It.IsAny<NumberNamingTextStyle>()), timesGroupPhotoFolderIteration);
@@ -326,7 +327,7 @@ public class CopyRunnerUnitTests
 		if (createSourcePath)
 			CreateSourcePathDirectory();
 
-		return new CopyRunner(NullLogger<CopyRunner>.Instance, options, _photoCollectorMock.Object, _exifDataAppenderMock.Object, _directoryGrouperMock.Object, _fileNamerMock.Object,
+		return new CopyRunner(NullLogger<CopyRunner>.Instance, options, _photoCollectorMock.Object, _exifDataAppenderMock.Object, _mediaIdentityAppenderMock.Object, _directoryGrouperMock.Object, _fileNamerMock.Object,
 			_fileServiceMock.Object, _fileSystemMock, _organizeByNoPhotoTakenActionMock.Object, _organizeDirectoriesByFolderProcessTypeMock.Object, _reverseGeocodeFetcherMock.Object,
 			_csvServiceMock.Object, ToolOptionFakes.Create(), new Statistics(), ConsoleWriterFakes.Valid());
 	}

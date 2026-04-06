@@ -1,0 +1,123 @@
+Devices:
+  - ID: PG9A
+    Name: "Panasonic Lumix G9 A"
+    Alias: "PG9A"
+    Make: "Panasonic"
+    Model: "DC-G9"
+    AltMakes: []
+    AltModels: []
+    SerialNumber: "XHR2011210144"
+
+  - ID: PG9B
+    Name: "Panasonic Lumix G9 B"
+    Alias: "PG9B"
+    Make: "Panasonic"
+    Model: "DC-G9"
+    AltMakes: []
+    AltModels: []
+    SerialNumber: "XHL2103080001"
+
+  - ID: XMI10
+    Name: "Xiaomi Mi 10"
+    Alias: "XMI10"
+    Make: "Xiaomi"
+    Model: "Mi 10"
+    AltMakes:
+      - "Google"
+    AltModels: []
+    Serialnumber: null
+
+  - ID: XMI12
+    Name: "Xiaomi Mi 12"
+    Alias: "XMI12"
+    Make: "Xiaomi"
+    Model: "Mi 12"
+    AltModels:
+      - "2201123G"
+    Serialnumber: null
+
+  - ID: PXL8P
+    Name: "Google Pixel 8 Pro"
+    Alias: "PXL8P"
+    Make: "Google"
+    Model: "Pixel 8 Pro"
+    AltMakes: []
+    AltModels: []
+    Serialnumber: null
+
+  - ID: XMI8
+    Name: "Xiaomi Mi 8"
+    Alias: "XMI8"
+    Make: "Xiaomi"
+    Model: "MI 8"
+    AltMakes:
+      - "XIAOMI"
+    AltModels:
+      - "MI 8 (GCam - Pixel III XL )"
+    Serialnumber: null
+
+  - ID: XMI6
+    Name: "Xiaomi Mi 6"
+    Alias: "XMI6"
+    Make: "Xiaomi"
+    Model: "MI 6"
+    AltModels: []
+    Serialnumber: null
+
+  - ID: XMI9
+    Name: "Xiaomi Mi 9"
+    Alias: "XMI9"
+    Make: "Xiaomi"
+    Model: "MI 9"
+    AltModels:
+      - "MI 9 P3XL"
+    Serialnumber: null
+
+  - ID: XMIRN3P
+    Name: "Xiaomi Redmi Note 3 Pro"
+    Alias: "XMIRN3P"
+    Make: "Xiaomi"
+    Model: "Redmi Note3"
+    AltModels: []
+    Serialnumber: null
+
+  - ID: LGNX4
+    Name: "Google Nexus 4"
+    Alias: "LGNX4"
+    Make: "LGE"
+    Model: "Nexus 4"
+    AltModels: []
+    Serialnumber: null
+
+  - ID: SGS1
+    Name: "Samsung Galaxy S"
+    Alias: "SGSI"
+    Make: "SAMSUNG"
+    Model: "GT-I9000"
+    AltModels: []
+    Serialnumber: null
+
+  - ID: LGL90
+    Name: "LG L90"
+    Alias: "LGL90"
+    Make: "LG Electronics"
+    Model: "LG-D405"
+    AltModels: []
+    Serialnumber: null
+
+  - ID: XMIYI1
+    Name: "Xiaomi YI"
+    Alias: "XMIYI1"
+    Make: "XIAOYI"
+    Model: "YDXJ 1"
+    AltModels: []
+    Serialnumber: null
+
+  # Device genérico por defecto
+  - ID: Unknown
+    Name: "Unknown Device"
+    Alias: "UNK"
+    Make: "3rdParty"
+    Model: "Unknown"
+    Serialnumber: null
+

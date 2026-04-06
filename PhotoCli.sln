@@ -1,8 +1,22 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoCli", "src\PhotoCli.csproj", "{780948EF-559B-44F8-94FE-53F0D9EB8B39}"
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35527.113
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoCli.Console", "src\PhotoCli.Console\PhotoCli.Console.csproj", "{780948EF-559B-44F8-94FE-53F0D9EB8B39}"
+	ProjectSection(ProjectDependencies) = postProject
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482} = {F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoCli.Tests", "tests\PhotoCli.Tests.csproj", "{48AFCE4F-B842-4745-A789-AB3732EB3A82}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpExifTool", "SharpExifTool\SharpExifTool.csproj", "{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{F679075D-352B-4E70-A86D-B3820F918D9E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoCli.Web", "src\PhotoCli.Web\PhotoCli.Web.csproj", "{37AAAD7A-B616-4056-8EC8-ADA462B112D2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoCli.Core", "src\PhotoCli.Core\PhotoCli.Core.csproj", "{D9D6AD0E-87E5-4D46-98C6-5233DCCADE19}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,5 +32,25 @@ Global
 		{48AFCE4F-B842-4745-A789-AB3732EB3A82}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{48AFCE4F-B842-4745-A789-AB3732EB3A82}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{48AFCE4F-B842-4745-A789-AB3732EB3A82}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2A1B383-0F3B-4C1D-99CF-9BAFC27C4482}.Release|Any CPU.Build.0 = Release|Any CPU
+		{37AAAD7A-B616-4056-8EC8-ADA462B112D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{37AAAD7A-B616-4056-8EC8-ADA462B112D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{37AAAD7A-B616-4056-8EC8-ADA462B112D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{37AAAD7A-B616-4056-8EC8-ADA462B112D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9D6AD0E-87E5-4D46-98C6-5233DCCADE19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9D6AD0E-87E5-4D46-98C6-5233DCCADE19}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9D6AD0E-87E5-4D46-98C6-5233DCCADE19}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9D6AD0E-87E5-4D46-98C6-5233DCCADE19}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{780948EF-559B-44F8-94FE-53F0D9EB8B39} = {F679075D-352B-4E70-A86D-B3820F918D9E}
+		{37AAAD7A-B616-4056-8EC8-ADA462B112D2} = {F679075D-352B-4E70-A86D-B3820F918D9E}
+		{D9D6AD0E-87E5-4D46-98C6-5233DCCADE19} = {F679075D-352B-4E70-A86D-B3820F918D9E}
 	EndGlobalSection
 EndGlobal

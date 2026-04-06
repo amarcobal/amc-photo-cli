@@ -1,0 +1,61 @@
+Authors:
+  - ID: Adrian
+    Name: "Adrián Marcobal"
+    Alias: "AMC"
+    Devices:
+      - ID: PXL8P
+        From: "2023-10-01"
+        To: null
+      - ID: PG9A
+        From: "2020-10-01"
+        To: null
+      - ID: PG9B
+        From: "2020-10-01"
+        To: null
+      - ID: LGNX4
+        From: null
+        To: null
+      - ID: SGS1
+        From: null
+        To: null
+      - ID: XMIYI1
+        From: null
+        To: null
+      - ID: XMI10
+        From: null
+        To: null
+      - ID: XMI8
+        From: null
+        To: "2019-06-06"
+      - ID: XMIRN3P
+        From: null
+        To: null
+
+  - ID: Laura
+    Name: "Laura Cortés"
+    Alias: "LCC"
+    Devices:
+      - ID: XMI12
+        From: "2022-10-01"
+        To: null
+      - ID: XMI9
+        From: "2019-06-07"
+        To: null
+      - ID: XMI8
+        From: null
+        To: null
+      - ID: XMI6
+        From: null
+        To: null
+      - ID: LGL90
+        From: null
+        To: null
+
+  # Author genérico por defecto
+  - ID: Unknown
+    Name: "Unknown Author"
+    Alias: "UNKN"
+    Devices:
+      - ID: Unknown
+        From: null
+        To: null

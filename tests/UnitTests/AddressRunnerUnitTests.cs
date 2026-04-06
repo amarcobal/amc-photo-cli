@@ -24,7 +24,7 @@ public class AddressRunnerUnitTests
 		var options = AddressOptionsFakes.WithAddressListType(addressListType);
 		var coordinate = CoordinateFakes.Valid();
 		SetupMockFileSystem(true);
-		_photoExifParserServiceMock.Setup(s => s.Parse(It.IsAny<string>(), false, true)).Returns(() => ExifDataFakes.WithCoordinate(coordinate));
+		_photoExifParserServiceMock.Setup(s => s.Parse(It.IsAny<string>(), false, true, false, false, false)).Returns(() => ExifDataFakes.WithCoordinate(coordinate));
 
 		string expectedConsoleOutput;
 		switch (addressListType)
@@ -66,7 +66,7 @@ public class AddressRunnerUnitTests
 	{
 		var options = AddressOptionsFakes.Valid();
 		SetupMockFileSystem(true);
-		_photoExifParserServiceMock.Setup(s => s.Parse(It.IsAny<string>(), false, true)).Returns(ExifDataFakes.WithNoCoordinate);
+		_photoExifParserServiceMock.Setup(s => s.Parse(It.IsAny<string>(), false, true, false, false, false)).Returns(ExifDataFakes.WithNoCoordinate);
 		var sut = new AddressRunner(_photoExifParserServiceMock.Object, _reverseGeocodeServiceMock.Object, options, ConsoleWriterFakes.Valid(), _fileSystemMock.Object);
 		var exitCode = await sut.Execute();
 		exitCode.Should().Be(ExitCode.PhotosWithNoCoordinatePreventedProcess);

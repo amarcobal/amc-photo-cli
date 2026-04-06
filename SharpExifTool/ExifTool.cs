@@ -1,0 +1,648 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace SharpExifTool
+{
+	public class ExifTool : IDisposable
+	{
+		private readonly string _exifToolBin;
+		private const string Arguments = @"-stay_open 1 -@ - -common_args -charset UTF8 -G1 -args";
+		private const string SessionControl = "-stay_open 1 -@ -";
+		private const string DefaultArgs = "-common_args -G1 -args";
+		private readonly string _exitCommand
+			= string.Join(Environment.NewLine, new string[] { "-stay_open", "0", $"-execute{Environment.NewLine}" });
+		private const int Timeout = 30000;      // in milliseconds
+		private const int ExitTimeout = 15000;
+
+		private readonly Encoding _utf8NoBom = new UTF8Encoding(false);
+
+		private Process _processExifTool;
+		private StreamWriter _writer;
+		private StreamReader _reader;
+
+		public ExifTool(string exiftoolPath = "", string exiftoolConfigPath = "", IEnumerable<string> commonArgs = null)
+		{
+			var currentDir = Path.GetDirectoryName(new System.Uri(System.Reflection.Assembly.GetExecutingAssembly().CodeBase).LocalPath);
+
+			// 1. Determinar la ruta del binario
+			if (string.IsNullOrEmpty(exiftoolPath))
+			{
+				if (string.IsNullOrWhiteSpace(currentDir))
+					throw new InvalidOperationException();
+
+				_exifToolBin =
+					RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+					? Path.Combine(currentDir, "ExifTool.Win", "exiftool.exe")
+					: Path.Combine(currentDir, "ExifTool.Unix", "exiftool");
+			}
+			else
+			{
+				if (!File.Exists(exiftoolPath))
+					throw new FileNotFoundException("ExifTool not found.", exiftoolPath);
+				_exifToolBin = exiftoolPath;
+			}
+
+			var argsList = new List<string>();
+
+			// A: El Config siempre primero
+			if (!string.IsNullOrEmpty(exiftoolConfigPath))
+			{
+				var resolvedConfigPath = Path.IsPathRooted(exiftoolConfigPath)
+					? exiftoolConfigPath
+					: Path.GetFullPath(Path.Combine(currentDir, exiftoolConfigPath));
+
+				if (!File.Exists(resolvedConfigPath))
+					throw new FileNotFoundException("ExifTool config not found.", resolvedConfigPath);
+
+				argsList.Add($"-config \"{resolvedConfigPath}\"");
+			}
+
+			// B: Flags de API (si vienen en commonArgs como -api QuickTimeUTC=1)
+			if (commonArgs != null)
+			{
+				argsList.AddRange(commonArgs);
+			}
+
+			// C: Configuración de Charset para la sesión
+			argsList.Add("-charset UTF8");
+
+			// D: Control de sesión
+			argsList.Add("-stay_open 1");
+			argsList.Add("-@ -");
+
+			// E: Argumentos comunes para cada comando
+			argsList.Add("-common_args");
+			argsList.Add("-G1");
+			argsList.Add("-n"); // Si quieres que -n sea global
+			argsList.Add("-args");
+
+			string finalArgs = string.Join(" ", argsList);
+
+			//// 2. Preparar la lista de argumentos
+			//var argsList = new List<string>();
+
+			//// Agregar Config si existe
+			//if (!string.IsNullOrEmpty(exiftoolConfigPath))
+			//{
+			//	var resolvedConfigPath = Path.IsPathRooted(exiftoolConfigPath)
+			//		? exiftoolConfigPath
+			//		: Path.GetFullPath(Path.Combine(currentDir, exiftoolConfigPath));
+
+			//	if (!File.Exists(resolvedConfigPath))
+			//		throw new FileNotFoundException("ExifTool config not found.", resolvedConfigPath);
+
+			//	argsList.Add($"-config \"{resolvedConfigPath}\"");
+			//}
+
+			//// Agregar argumentos comunes (API flags, -n, etc.)
+			//if (commonArgs != null)
+			//{
+			//	argsList.AddRange(commonArgs);
+			//}
+
+			//// 3. Combinar con los argumentos base necesarios para el funcionamiento de la clase
+			//// Es vital que Arguments (-stay_open, -common_args, -G1...) vaya al final
+			//string finalArgs = string.Join(" ", argsList) + $" {Arguments}";
+
+			// 4. Configurar el inicio del proceso
+			var psi = new ProcessStartInfo(_exifToolBin, finalArgs)
+			{
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardInput = true,
+				RedirectStandardOutput = true,
+				StandardOutputEncoding = _utf8NoBom // Asegura que acentos como "Adrián" se lean bien
+			};
+
+			try
+			{
+				_processExifTool = Process.Start(psi);
+				if (_processExifTool == null || _processExifTool.HasExited)
+				{
+					throw new ApplicationException("Failed to launch ExifTool!");
+				}
+			}
+			catch (System.ComponentModel.Win32Exception err)
+			{
+				throw new ApplicationException("Failed to load ExifTool. 'ExifTool.exe' should be located in the same directory as the application or on the path.", err);
+			}
+
+			// 5. Inicializar el Writer y Reader para la comunicación bidireccional
+			_writer = new StreamWriter(_processExifTool.StandardInput.BaseStream, _utf8NoBom);
+			_reader = _processExifTool.StandardOutput;
+		}
+
+		//public ExifTool(string exiftoolPath = "", string exiftoolConfigPath = "", IEnumerable<string> initialApiFlags = null)
+		//{
+		//	var currentDir = Path.GetDirectoryName(new System.Uri(System.Reflection.Assembly.GetExecutingAssembly().CodeBase).LocalPath);
+
+		//	if (string.IsNullOrEmpty(exiftoolPath))
+		//	{
+		//		if (string.IsNullOrWhiteSpace(currentDir))
+		//			throw new InvalidOperationException();
+
+		//		_exifToolBin =
+		//			RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+		//			? Path.Combine(currentDir, "ExifTool.Win", "exiftool.exe")
+		//			: Path.Combine(currentDir, "ExifTool.Unix", "exiftool");
+		//	}
+		//	else
+		//	{
+		//		if (!File.Exists(exiftoolPath))
+		//			throw new FileNotFoundException("ExifTool not found.", exiftoolPath);
+		//		_exifToolBin = exiftoolPath;
+		//	}
+
+		//	string arguments = string.Empty;
+		//	if (!string.IsNullOrEmpty(exiftoolConfigPath))
+		//	{
+		//		var resolvedConfigPath = Path.IsPathRooted(exiftoolConfigPath)
+		//			? exiftoolConfigPath
+		//			: Path.GetFullPath(Path.Combine(currentDir, exiftoolConfigPath));
+
+		//		if (!File.Exists(resolvedConfigPath))
+		//			throw new FileNotFoundException("ExifTool config not found.", resolvedConfigPath);
+
+		//		arguments = $"-config \"{resolvedConfigPath}\"";
+		//	}
+
+		//	// ⭐️ 3. Agregar los Flags de API (si existen)
+		//	if (initialApiFlags != null)
+		//	{
+		//		// Concatenar los flags de API. Ejemplo: "-api QuickTimeUTC=1 -api LargeFileSupport=1"
+		//		var apiString = string.Join(" ", initialApiFlags.Select(flag => $"{flag}"));
+		//		arguments += $" {apiString}";
+		//	}
+
+		//	arguments += $" {Arguments}";
+
+		//	// Prepare process start
+		//	var psi = new ProcessStartInfo(_exifToolBin, arguments)
+		//	{
+		//		UseShellExecute = false,
+		//		CreateNoWindow = true,
+		//		RedirectStandardInput = true,
+		//		RedirectStandardOutput = true,
+		//		StandardOutputEncoding = _utf8NoBom
+		//	};
+
+		//	try
+		//	{
+		//		_processExifTool = Process.Start(psi);
+		//		if (_processExifTool == null || _processExifTool.HasExited)
+		//		{
+		//			throw new ApplicationException("Failed to launch ExifTool!");
+		//		}
+		//	}
+		//	catch (System.ComponentModel.Win32Exception err)
+		//	{
+		//		throw new ApplicationException("Failed to load ExifTool. 'ExifTool.exe' should be located in the same directory as the application or on the path.", err);
+		//	}
+
+		//	// ProcessStartInfo in .NET Framework doesn't have a StandardInputEncoding property (though it does in .NET Core)
+		//	// So, we have to wrap it this way.
+		//	_writer = new StreamWriter(_processExifTool.StandardInput.BaseStream, _utf8NoBom);
+		//	_reader = _processExifTool.StandardOutput;
+		//}
+
+		/*
+        public Task<int> ExecuteAsync(string args)
+        {
+            return Task.FromResult(Execute(args));
+        }
+        */
+
+		public Task<int> ExecuteAsync(params string[] args)
+		{
+			return Task.FromResult(Execute(args));
+		}
+
+		public Task<int> ExecuteAsync(IEnumerable<string> args)
+		{
+			return Task.FromResult(Execute(args));
+		}
+
+		/*
+        public int Execute(string args)
+        {
+            var argList = args
+                .Split(' ')
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim());
+            return Execute(argList);
+        }
+        */
+
+		public int Execute(params string[] args)
+		{
+			return Execute((IEnumerable<string>)args);
+		}
+
+		public int Execute(IEnumerable<string> args)
+		{
+			var sb = new StringBuilder();
+			foreach (var arg in args)
+			{
+				sb.AppendLine(arg);
+			}
+
+			sb.AppendLine("-execute");
+
+			_writer.Write(sb.ToString());
+			_writer.Flush();
+
+			return 0;
+		}
+
+		#region Commands
+
+		#region GET
+
+		// CAMBIO: El retorno ahora es Dictionary<string, string>
+		public Task<Dictionary<string, string>> ExtractAllMetadataAsync(string filename, params string[] args)
+		{
+			return Task.FromResult(ExtractAllMetadata(filename, args));
+		}
+
+		// CAMBIO: El retorno ahora es Dictionary<string, string>
+		public Dictionary<string, string> ExtractAllMetadata(string filename, params string[] args)
+		{
+			var commands = new List<string> { };
+			if (args != null && args.Length > 0)
+			{
+				commands.AddRange(args);
+			}
+			commands.Add(filename);
+
+			Execute(commands);
+
+			// CAMBIO: Inicializamos como Dictionary
+			var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+			while (true)
+			{
+				var line = _reader.ReadLine();
+
+				if (line.StartsWith("{ready")) break;
+				if (line[0] == '-')
+				{
+					int eq = line.IndexOf('=');
+					if (eq > 1)
+					{
+						string key = line.Substring(1, eq - 1);
+						string value = line.Substring(eq + 1).Trim();
+
+						// Añadir al diccionario. Usamos TryAdd para evitar errores de clave duplicada si ExifTool devuelve tags repetidos.
+						if (!result.TryAdd(key, value))
+						{
+							// Manejo de duplicados si es necesario, aunque TryAdd ya lo evita
+						}
+					}
+				}
+			}
+
+			return result;
+		}
+
+		// CAMBIO: El retorno ahora es Dictionary<string, string>
+		public Task<Dictionary<string, string>> GetMetadataAsync(string filename, string[] keys)
+		{
+			return Task.FromResult(GetMetadata(filename, keys));
+		}
+
+		// CAMBIO: El retorno ahora es Dictionary<string, string>
+		public Dictionary<string, string> GetMetadata(string filename, params string[] keys)
+		{
+			if (keys == null || keys.Length == 0)
+				throw new ArgumentException("At least one key must be provided.", nameof(keys));
+
+			// Construimos el comando con todos los tags solicitados
+			var commands = keys.Select(k => $"-{k}").ToList();
+			commands.Add(filename);
+
+			Execute(commands);
+
+			// CAMBIO: Inicializamos como Dictionary, usando StringComparer para búsquedas insensibles a mayúsculas
+			var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+			while (true)
+			{
+				var line = _reader.ReadLine();
+				if (line == null)
+					break;
+				if (line.StartsWith("{ready"))
+					break;
+
+				if (line.Length > 1 && line[0] == '-')
+				{
+					int eq = line.IndexOf('=');
+					if (eq > 1)
+					{
+						string key = line.Substring(1, eq - 1);
+						string value = line.Substring(eq + 1).Trim();
+
+						// Usamos TryAdd para manejar posibles duplicados
+						if (!result.TryAdd(key, value))
+						{
+							// Manejo de duplicados si es necesario
+						}
+					}
+				}
+			}
+
+			// Aseguramos que todos los keys pedidos están en la colección,
+			// incluso si no fueron devueltos por ExifTool
+			foreach (var key in keys)
+			{
+				// CAMBIO: Usamos ContainsKey que es O(1)
+				if (!result.ContainsKey(key))
+					result.Add(key, string.Empty);
+			}
+
+			return result;
+		}
+
+		#endregion
+
+		#region WRITE
+
+		public Task<int> WriteTagsAsync(string filename, ICollection<KeyValuePair<string, string>> properties, ICollection<string> extraCommands = null, bool overwriteOriginal = false)
+		{
+			return Task.FromResult(WriteTags(filename, properties, extraCommands, overwriteOriginal));
+		}
+
+		public int WriteTags(string filename, ICollection<KeyValuePair<string, string>> properties, ICollection<string> extraCommands = null, bool overwriteOriginal = false, bool isVerbose = false)
+		{
+			var commands = new List<string> { };
+
+			if (extraCommands != null)
+			{
+				commands.AddRange(extraCommands);
+			}
+
+			foreach (var property in properties)
+			{
+				// 1. Aplanar el nombre del tag (Identity:Author:Name -> IdentityAuthorName)
+				// Esto es clave para escribir correctamente en estructuras definidas por el usuario.
+				string flattenedKey = FlattenTag(property.Key);
+
+				// 2. Verificar si el valor comienza con el signo de copia (<)
+				if (property.Value.StartsWith('<'))
+				{
+					// Comando de COPIA: -Tag<SourceTag
+					commands.Add($"-{flattenedKey}{property.Value}");
+				}
+				else
+				{
+					// Comando de ASIGNACIÓN DIRECTA: -Tag=Valor
+					commands.Add($"-{flattenedKey}={property.Value}");
+				}
+			}
+
+			if (overwriteOriginal)
+				commands.Add("-overwrite_original");
+
+			commands.Add(filename);
+
+			if (isVerbose)
+			{
+				commands.Add("-v3");
+			}
+
+			// 1. Ejecutar los comandos. Esto envía los argumentos y el -execute.
+			Execute(commands);
+
+			// 2. Leer TODA la salida hasta el marcador {ready}
+			var output = new StringBuilder();
+			while (true)
+			{
+				var line = _reader.ReadLine();
+				if (line == null)
+				{
+					// Salida inesperada (ExifTool se cerró o se detuvo)
+					break;
+				}
+
+				// ExifTool en modo stay_open siempre termina con esta línea
+				if (line.StartsWith("{ready"))
+				{
+					break;
+				}
+
+				// Si no es el marcador de fin, lo agregamos al buffer
+				output.AppendLine(line);
+			}
+
+			// 3. Escribir el output completo para su revisión (en Debug o en Console)
+			Debug.WriteLine("--- ExifTool Write Output ---");
+			Debug.WriteLine(output.ToString());
+
+			return 0;
+		}
+
+		#endregion
+
+		#region DELETE
+
+		public Task<int> DeleteAllMetadataAsync(string filename, bool overwriteOriginal = false)
+		{
+			return Task.FromResult(DeleteAllMetadata(filename, overwriteOriginal));
+		}
+
+		public int DeleteAllMetadata(string filename, bool overwriteOriginal = false)
+		{
+			WriteTags(
+				filename,
+				new Dictionary<string, string> { ["all"] = "" },
+				overwriteOriginal: overwriteOriginal);
+
+			return 0;
+		}
+
+		public Task<int> DeleteTagAsync(string filename, ICollection<string> tags, bool overwriteOriginal = false)
+		{
+			return Task.FromResult(DeleteTag(filename, tags, overwriteOriginal));
+		}
+
+		public int DeleteTag(string filename, ICollection<string> tags, bool overwriteOriginal = false)
+		{
+			if (tags == null || tags.Count == 0)
+				throw new ArgumentException("At least one tag must be provided to remove metadata.", nameof(tags));
+
+			var commands = new List<string>();
+
+			foreach (var tag in tags)
+			{
+				// ExifTool syntax to delete a specific tag
+				commands.Add($"-{tag}=");
+			}
+
+			if (overwriteOriginal)
+				commands.Add("-overwrite_original");
+
+			commands.Add(filename);
+
+			Execute(commands);
+
+			// Leer una línea opcional de salida (similar a WriteTags)
+			var line = _reader.ReadLine();
+			Debug.WriteLine(line);
+
+			return 0;
+		}
+
+		#endregion
+
+		#endregion
+
+		#region Utility Functions (NEW)
+
+		/// <summary>
+		/// Convierte nombres de tags estructurados (ej. XMP-AMC:Identity:Author:Name) a nombres aplanados (XMP-AMC:IdentityAuthorName) 
+		/// para su uso en la CLI de ExifTool. Los tags planos no se modifican.
+		/// </summary>
+		private static string FlattenTag(string structuredTag)
+		{
+			// Buscamos el primer ':' para separar el namespace/grupo (ej. XMP-AMC:) del resto de la estructura.
+			int colonIndex = structuredTag.IndexOf(':');
+
+			if (colonIndex > 0)
+			{
+				// El prefijo (namespace) debe mantenerse (ej. XMP-AMC:)
+				string nsPrefix = structuredTag.Substring(0, colonIndex + 1);
+
+				// La parte estructurada es el resto (ej. Identity:Author:Name)
+				string structurePart = structuredTag.Substring(colonIndex + 1);
+
+				// Si la parte estructurada contiene más ':' (es una estructura anidada), 
+				// reemplazamos esos ':' por nada para aplanarla.
+				if (structurePart.Contains(':'))
+				{
+					return nsPrefix + structurePart.Replace(":", "");
+				}
+			}
+
+			// Si no tiene el formato Namespace:Tag o no es estructurado, lo devolvemos tal cual.
+			return structuredTag;
+		}
+
+		#endregion
+
+		#region IDisposable Support
+
+		private void Dispose(bool disposing)
+		{
+			if (_processExifTool == null)
+				return;
+
+			if (!disposing)
+			{
+				System.Diagnostics.Debug.Fail("Failed to dispose ExifTool.");
+			}
+
+			// If the process is running, shut it down cleanly
+			if (!_processExifTool.HasExited)
+			{
+				_writer.Write(_exitCommand);
+				_writer.Flush();
+
+				if (!_processExifTool.WaitForExit(ExitTimeout))
+				{
+					_processExifTool.Kill();
+					Debug.Fail("Timed out waiting for exiftool to exit.");
+				}
+#if EXIF_TRACE
+                    else
+                    {
+                        Debug.WriteLine("ExifTool exited cleanly.");
+                    }
+#endif
+			}
+
+			if (_reader != null)
+			{
+				_reader.Dispose();
+				_reader = null;
+			}
+			if (_writer != null)
+			{
+				_writer.Dispose();
+				_writer = null;
+			}
+			_processExifTool.Dispose();
+			_processExifTool = null;
+		}
+
+		~ExifTool()
+		{
+			// Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+			Dispose(false);
+		}
+
+		// This code added to correctly implement the disposable pattern.
+		public void Dispose()
+		{
+			// Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+			Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+		#endregion
+
+		#region Static Methods
+
+		/// <summary>
+		/// Attempt to parse a date-time in the format used by ExifTool
+		/// </summary>
+		/// <param name="s">The string to be parsed</param>
+		/// <param name="kind">The <see cref="DateTimeKind"/> to be assigned to the resulting value. It is generally
+		/// determined by the definition of the corresponding field.</param>
+		/// <param name="date">The resulting parsed date.</param>
+		/// <returns>True if successful, else false.</returns>
+		/// <remarks>
+		/// <para>ExifTool formats dates as follows: "YYYY:MM:DD hh:mm:ss". For example, "2018:06:22 19:32:53".</para>
+		/// </remarks>
+		public static bool TryParseDate(string s, DateTimeKind kind, out DateTime date)
+		{
+			date = DateTime.MinValue;
+			int year, month, day, hour, minute, second;
+			s = s.Trim();
+			if (!int.TryParse(s.Substring(0, 4), out year)) return false;
+			if (s[4] != ':') return false;
+			if (!int.TryParse(s.Substring(5, 2), out month)) return false;
+			if (s[7] != ':') return false;
+			if (!int.TryParse(s.Substring(8, 2), out day)) return false;
+			if (s[10] != ' ') return false;
+			if (!int.TryParse(s.Substring(11, 2), out hour)) return false;
+			if (s[13] != ':') return false;
+			if (!int.TryParse(s.Substring(14, 2), out minute)) return false;
+			if (s[16] != ':') return false;
+			if (!int.TryParse(s.Substring(17, 2), out second)) return false;
+
+			if (year < 1900 || year > 2200) return false;
+			if (month < 1 || month > 12) return false;
+			if (day < 1 || day > 31) return false;
+			if (hour < 0 || hour > 23) return false;
+			if (minute < 0 || minute > 59) return false;
+			if (second < 0 || second > 59) return false;
+
+			try
+			{
+				date = new DateTime(year, month, day, hour, minute, second, 0, kind);
+			}
+			catch (Exception)
+			{
+				return false; // Probaby a month with too many days.
+			}
+
+			return true;
+		}
+
+		#endregion Static Methods
+	}
+}

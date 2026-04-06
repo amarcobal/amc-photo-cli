@@ -1,0 +1,99 @@
+using Microsoft.Extensions.Logging;
+using PhotoCli.Console.Options;
+using PhotoCli.Core.Models;
+using PhotoCli.Core.Models.Enums;
+using PhotoCli.Core.Services.Contracts;
+using System.IO.Abstractions;
+
+namespace PhotoCli.Console.Runners;
+
+public class InfoRunner : BaseRunner, IConsoleRunner
+{
+	private readonly ICsvService _csvService;
+	private readonly IExifDataAppenderService _exifDataAppenderService;
+	private readonly IFileSystem _fileSystem;
+	private readonly ILogger<InfoRunner> _logger;
+	private readonly InfoOptions _options;
+	private readonly IPhotoCollectorService _photoCollectorService;
+	private readonly IReverseGeocodeFetcherService _reverseGeocodeFetcherService;
+
+	public InfoRunner(ILogger<InfoRunner> logger, InfoOptions options, IPhotoCollectorService photoCollectorService, IExifDataAppenderService exifDataAppenderService, IFileSystem fileSystem,
+		IReverseGeocodeFetcherService reverseGeocodeFetcherService, ICsvService csvService, Statistics statistics, IConsoleWriter consoleWriter) : base(logger, fileSystem,
+		statistics, consoleWriter)
+	{
+		_logger = logger;
+		_options = options;
+		_photoCollectorService = photoCollectorService;
+		_exifDataAppenderService = exifDataAppenderService;
+		_fileSystem = fileSystem;
+		_reverseGeocodeFetcherService = reverseGeocodeFetcherService;
+		_csvService = csvService;
+	}
+
+	public async Task<ExitCode> Execute()
+	{
+		var sourceFolderPath = _options.InputPath ?? Environment.CurrentDirectory;
+
+		if (!CheckInputFolderExists(sourceFolderPath, out var exitCodeInputFolder))
+			return exitCodeInputFolder;
+
+		if (!CheckOutputPath(out var exitCodeOutputPath))
+			return exitCodeOutputPath;
+
+		var photoPaths = _photoCollectorService.Collect(sourceFolderPath, _options.AllFolders, false);
+
+		if (!ValidatePhotoPaths(out var exitCodePhotoPaths, photoPaths, sourceFolderPath))
+			return exitCodePhotoPaths;
+
+		var isNoPhotoTakenDatePreventProcessOptionSelected = _options.NoPhotoTakenDateAction == InfoNoPhotoTakenDateAction.PreventProcess;
+		var isNoCoordinatePreventProcessOptionSelected = _options.NoCoordinateAction == InfoNoCoordinateAction.PreventProcess;
+		var isInvalidFileFormatPreventProcessOptionSelected = _options.InvalidFileFormatAction == InfoInvalidFormatAction.PreventProcess;
+
+		var photos = _exifDataAppenderService.ExtractExifData(photoPaths, out var allPhotosAreValid, out var allPhotosHasPhotoTaken, out var allPhotosHasCoordinate, out var allPhotosHasMakeModel, out var allPhotosHasSubseconds, out var allPhotosHasOriginalFileName);
+		if (!NoExifDataPreventActions(out var exitCodeNoExif, allPhotosAreValid, allPhotosHasPhotoTaken, allPhotosHasCoordinate,
+			    isInvalidFileFormatPreventProcessOptionSelected, isNoPhotoTakenDatePreventProcessOptionSelected, isNoCoordinatePreventProcessOptionSelected, photos))
+		{
+			return exitCodeNoExif;
+		}
+
+		if (_options.ReverseGeocodeProvider != ReverseGeocodeProvider.Disabled)
+			photos = await _reverseGeocodeFetcherService.Fetch(photos);
+
+		await _csvService.CreateInfoReport(photos, _options.OutputPath);
+
+		WriteStatistics();
+
+		return ExitCode.Success;
+	}
+
+	private bool CheckOutputPath(out ExitCode exitCode)
+	{
+		
+		var now = DateTime.Now;
+		var fileName = $"{now:yyyy-MM-dd_HH-mm-ss}_photo-info.csv";
+		var outputFile = _fileSystem.FileInfo.New(Path.Combine(_options.OutputPath, fileName));
+
+
+		if (outputFile.Exists)
+		{
+			_logger.LogCritical("Output file: {Path} is exists", _options.OutputPath);
+			exitCode = ExitCode.OutputPathIsExists;
+			return false;
+		}
+
+		if (outputFile.Directory == null || !outputFile.Directory.Exists && !HasCreatedDirectory(outputFile.Directory))
+		{
+			exitCode = ExitCode.OutputPathDontHaveCreateDirectoryPermission;
+			return false;
+		}
+
+		if (!HasPermissionToWriteFile(outputFile))
+		{
+			exitCode = ExitCode.OutputPathDontHaveWriteFilePermission;
+			return false;
+		}
+
+		exitCode = ExitCode.Unset;
+		return true;
+	}
+}

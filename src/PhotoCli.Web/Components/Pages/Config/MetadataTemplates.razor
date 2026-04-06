@@ -1,0 +1,401 @@
+@page "/config/templates"
+@rendermode InteractiveServer
+@using System.IO.Abstractions
+@using Microsoft.Extensions.Configuration
+@using System.IO
+@using YamlDotNet.Serialization
+@inject IFileSystem FileSystem
+@inject ISnackbar Snackbar
+@inject IConfiguration Configuration
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudGrid>
+        <MudItem xs="8">
+            <MudText Typo="Typo.h4" GutterBottom="true" Color="Color.Primary">
+                <MudIcon Icon="@Icons.Material.Filled.LibraryBooks" Class="mr-2" />
+                Plantillas de Metadatos
+            </MudText>
+            <MudText Typo="Typo.subtitle1">
+                Define las reglas, campos y mapeos de metadatos (EXIF, XMP, IPTC).
+            </MudText>
+        </MudItem>
+        <MudItem xs="4" Class="d-flex justify-end align-center">
+            <MudSwitch T="bool" Value="@_isRawMode" ValueChanged="OnModeChanged" Label="Modo Código (YAML)" Color="Color.Secondary" Size="Size.Large" />
+        </MudItem>
+    </MudGrid>
+
+    @if (!_isRawMode)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-2 mb-4" Dense="true">
+            Nota: El editor visual estructura el contenido automáticamente. Al guardar desde aquí, los comentarios originales del YAML (#) se omitirán.
+        </MudAlert>
+    }
+
+    @if (_isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Class="mt-6" />
+    }
+    else
+    {
+        <MudCard Elevation="3">
+            <MudCardContent>
+                @if (_isRawMode)
+                {
+                    <MudTextField @bind-Value="_content"
+                                  Variant="Variant.Outlined"
+                                  Lines="25"
+                                  Style="font-family: monospace; font-size: 0.9rem; background-color: #1e1e1e; color: #d4d4d4; padding: 12px;" />
+                }
+                else
+                {
+                    @* TABLA MAESTRA: PLANTILLAS *@
+                    <MudTable Items="@_templates" Dense="true" Hover="true" Elevation="0"
+                              CanCancelEdit="true"
+                              EditTrigger="TableEditTrigger.EditButton"
+                              RowEditPreview="BackupTemplate"
+                              RowEditCancel="ResetTemplate"
+                              RowEditCommit="CommitTemplate">
+                        <ToolBarContent>
+                            <MudText Typo="Typo.h6">Tus Plantillas</MudText>
+                            <MudSpacer />
+                            <MudButton Color="Color.Success" StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Filled" OnClick="AddTemplate">
+                                Nueva Plantilla
+                            </MudButton>
+                        </ToolBarContent>
+
+                        <HeaderContent>
+                            <MudTh><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>Tags</b></MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>Nombre de la Plantilla</b></MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>Total Etiquetas</b></MudText></MudTh>
+                            <MudTh Style="text-align:right"><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>Acciones</b></MudText></MudTh>
+                        </HeaderContent>
+
+                        <RowTemplate>
+                            <MudTd>
+                                <MudIconButton Icon="@(context.ShowDetails ? Icons.Material.Filled.KeyboardArrowUp : Icons.Material.Filled.KeyboardArrowDown)"
+                                               Color="Color.Info" Size="Size.Small"
+                                               OnClick="@(() => context.ShowDetails = !context.ShowDetails)" />
+                            </MudTd>
+                            <MudTd DataLabel="Nombre de Plantilla"><b>@context.Name</b></MudTd>
+                            <MudTd DataLabel="Total Etiquetas">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                    @(context.Tags?.Count ?? 0) tags
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Acciones" Style="text-align:right">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(async () => await DeleteTemplate(context))" />
+                            </MudTd>
+                        </RowTemplate>
+
+                        <RowEditingTemplate>
+                            <MudTd></MudTd>
+                            <MudTd DataLabel="Nombre de Plantilla">
+                                <MudTextField @bind-Value="context.Name" Required="true" RequiredError="Obligatorio" />
+                            </MudTd>
+                            <MudTd DataLabel="Total Etiquetas"><MudText Typo="Typo.caption" Color="Color.Secondary">No editable aquí</MudText></MudTd>
+                            <MudTd></MudTd>
+                        </RowEditingTemplate>
+
+                        @* SUB-TABLA: TAGS DE LA PLANTILLA *@
+                        <ChildRowContent>
+                            @if (context.ShowDetails)
+                            {
+                                <MudTr>
+                                    <td colspan="4" style="padding: 16px; background-color: #242424; border-left: 4px solid #9c27b0;">
+                                        <MudText Typo="Typo.subtitle2" Class="mb-3">Configuración de Etiquetas para: <b>@context.Name</b></MudText>
+
+                                        <MudTable Items="@context.Tags" Dense="true" Hover="true" Elevation="1" Style="background-color: #1e1e1e;"
+                                                  CanCancelEdit="true"
+                                                  EditTrigger="TableEditTrigger.EditButton"
+                                                  RowEditCommit="CommitTag">
+                                            <HeaderContent>
+                                                <MudTh>Nombre del Tag (Destino)</MudTh>
+                                                <MudTh>Valor Origen (Source Key)</MudTh>
+                                                <MudTh>Tipo Asset</MudTh>
+                                                <MudTh>Obligatorio</MudTh>
+                                                <MudTh>Sobrescribir</MudTh>
+                                                <MudTh Style="text-align:right">
+                                                    <MudIconButton Icon="@Icons.Material.Filled.AddCircle" Color="Color.Success" Size="Size.Small" OnClick="@(() => AddTag(context))" />
+                                                </MudTh>
+                                            </HeaderContent>
+                                            <RowTemplate Context="tagCtx">
+                                                <MudTd DataLabel="Tag Destino"><b>@tagCtx.Name</b></MudTd>
+                                                <MudTd DataLabel="Origen">@tagCtx.SourceValueKey</MudTd>
+                                                <MudTd DataLabel="Asset">
+                                                    <MudChip T="string" Size="Size.Small" Color="@GetAssetColor(tagCtx.AssetType)">
+                                                        @(string.IsNullOrEmpty(tagCtx.AssetType) ? "Ambos" : tagCtx.AssetType)
+                                                    </MudChip>
+                                                </MudTd>
+                                                <MudTd DataLabel="Req">
+                                                    <MudCheckBox T="bool" @bind-Value="tagCtx.Required" ReadOnly="true" Color="Color.Primary" Dense="true" />
+                                                </MudTd>
+                                                <MudTd DataLabel="Over">
+                                                    <MudCheckBox T="bool" @bind-Value="tagCtx.Overwrite" ReadOnly="true" Color="Color.Secondary" Dense="true" />
+                                                </MudTd>
+                                                <MudTd Style="text-align:right">
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" Size="Size.Small" OnClick="@(async () => { context.Tags.Remove(tagCtx); await AutoSave(); })" />
+                                                </MudTd>
+                                            </RowTemplate>
+                                            <RowEditingTemplate Context="tagCtx">
+                                                <MudTd DataLabel="Tag Destino"><MudTextField @bind-Value="tagCtx.Name" Required="true" Margin="Margin.Dense" /></MudTd>
+                                                <MudTd DataLabel="Origen"><MudTextField @bind-Value="tagCtx.SourceValueKey" Required="true" Margin="Margin.Dense" /></MudTd>
+                                                <MudTd DataLabel="Asset">
+                                                    <MudSelect T="string" @bind-Value="tagCtx.AssetType" Margin="Margin.Dense">
+                                                        <MudSelectItem Value="@((string)null)">Ambos (All)</MudSelectItem>
+                                                        <MudSelectItem Value="@("Photo")">Foto</MudSelectItem>
+                                                        <MudSelectItem Value="@("Video")">Vídeo</MudSelectItem>
+                                                    </MudSelect>
+                                                </MudTd>
+                                                <MudTd DataLabel="Req"><MudCheckBox T="bool" @bind-Value="tagCtx.Required" Color="Color.Primary" Dense="true" /></MudTd>
+                                                <MudTd DataLabel="Over"><MudCheckBox T="bool" @bind-Value="tagCtx.Overwrite" Color="Color.Secondary" Dense="true" /></MudTd>
+                                                <MudTd></MudTd>
+                                            </RowEditingTemplate>
+                                        </MudTable>
+                                    </td>
+                                </MudTr>
+                            }
+                        </ChildRowContent>
+                    </MudTable>
+                }
+            </MudCardContent>
+
+            @if (_isRawMode)
+            {
+                <MudCardActions Class="pb-4 pl-4" Style="background-color: rgba(63, 81, 181, 0.1);">
+                    <MudButton StartIcon="@Icons.Material.Filled.Save" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="SaveFile">
+                        Guardar YAML
+                    </MudButton>
+                </MudCardActions>
+            }
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    // ---------------------------------------------------------
+    // VIEW MODELS Y CLASES DE DESERIALIZACIÓN LOCALES
+    // ---------------------------------------------------------
+
+    // Clases exclusivas para leer el YAML sin depender del Core
+    public class YamlSource { public string Type { get; set; } = "Variable"; public string ValueKey { get; set; } = ""; }
+    public class YamlTag
+    {
+        public string Name { get; set; } = "";
+        public bool Required { get; set; }
+        public string? AssetType { get; set; }
+        public string? WriteTag { get; set; }
+        public string? ReadTag { get; set; }
+        public bool? Overwrite { get; set; }
+        public YamlSource Source { get; set; } = new YamlSource();
+    }
+
+    // ViewModels para la UI
+    public class TagViewModel
+    {
+        public string Name { get; set; } = "";
+        public bool Required { get; set; }
+        public string? AssetType { get; set; }
+        public bool Overwrite { get; set; }
+        public string SourceValueKey { get; set; } = "";
+
+        // Propiedades extra ocultas para no perder datos si existen en el YAML
+        public string? WriteTag { get; set; }
+        public string? ReadTag { get; set; }
+    }
+
+    public class TemplateViewModel
+    {
+        public string Name { get; set; } = "";
+        public List<TagViewModel> Tags { get; set; } = new();
+        public bool ShowDetails { get; set; } = false;
+        public bool IsNew { get; set; } = false;
+    }
+
+    private bool _isLoading = true;
+    private string _filePath = "";
+    private string _content = string.Empty;
+    private List<TemplateViewModel> _templates = new();
+    private bool _isRawMode = false;
+    private TemplateViewModel? _templateBeforeEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Snackbar.Configuration.PositionClass = Defaults.Classes.Position.BottomRight;
+        var configFolder = Configuration.GetValue<string>("ConfigFolder") ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config");
+        _filePath = Path.Combine(configFolder, "MetadataTemplates.yaml");
+
+        await LoadFile();
+        _isLoading = false;
+    }
+
+    private async Task LoadFile()
+    {
+        try
+        {
+            if (FileSystem.File.Exists(_filePath))
+                _content = await FileSystem.File.ReadAllTextAsync(_filePath);
+            else
+                _content = "Templates:\n  AMC-Basic-Metadata: []";
+
+            ParseYamlToObjects();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OnModeChanged(bool isRaw)
+    {
+        if (isRaw) GenerateYamlFromObjects();
+        else ParseYamlToObjects();
+        _isRawMode = isRaw;
+    }
+
+    // --- CICLO DE VIDA DE PLANTILLAS (MAESTRO) ---
+    private void BackupTemplate(object element)
+    {
+        var t = (TemplateViewModel)element;
+        _templateBeforeEdit = new TemplateViewModel { Name = t.Name, IsNew = t.IsNew };
+    }
+
+    private void ResetTemplate(object element)
+    {
+        var t = (TemplateViewModel)element;
+        if (t.IsNew) _templates.Remove(t);
+        else if (_templateBeforeEdit != null) t.Name = _templateBeforeEdit.Name;
+        StateHasChanged();
+    }
+
+    private void CommitTemplate(object element)
+    {
+        var t = (TemplateViewModel)element;
+        t.IsNew = false;
+        _ = AutoSave();
+    }
+
+    private void AddTemplate()
+    {
+        _templates.Insert(0, new TemplateViewModel { Name = "Nueva-Plantilla", IsNew = true });
+        StateHasChanged();
+    }
+
+    private async Task DeleteTemplate(TemplateViewModel t)
+    {
+        _templates.Remove(t);
+        _templates = _templates.ToList();
+        await AutoSave();
+    }
+
+    // --- CICLO DE VIDA DE TAGS (DETALLE) ---
+    private void AddTag(TemplateViewModel template)
+    {
+        template.Tags.Insert(0, new TagViewModel { Name = "Nuevo:Tag", SourceValueKey = "Valor" });
+        StateHasChanged();
+    }
+
+    private void CommitTag(object element)
+    {
+        // Se llama al confirmar la edición de un Tag individual
+        _ = AutoSave();
+    }
+
+    // --- YAMLDOTNET ---
+    private void ParseYamlToObjects()
+    {
+        try
+        {
+            var deserializer = new DeserializerBuilder().IgnoreUnmatchedProperties().Build();
+            // La raíz es Templates -> Diccionario <Nombre, ListaDeTags>
+            var root = deserializer.Deserialize<Dictionary<string, Dictionary<string, List<YamlTag>>>>(_content);
+
+            if (root != null && root.ContainsKey("Templates") && root["Templates"] != null)
+            {
+                _templates = root["Templates"].Select(kvp => new TemplateViewModel
+                    {
+                        Name = kvp.Key,
+                        Tags = kvp.Value?.Select(tag => new TagViewModel
+                        {
+                            Name = tag.Name,
+                            Required = tag.Required,
+                            AssetType = tag.AssetType,
+                            Overwrite = tag.Overwrite ?? false,
+                            SourceValueKey = tag.Source?.ValueKey ?? "",
+                            WriteTag = tag.WriteTag,
+                            ReadTag = tag.ReadTag
+                        }).ToList() ?? new List<TagViewModel>()
+                    }).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error de sintaxis YAML: {ex.Message}", Severity.Warning);
+            _isRawMode = true;
+        }
+    }
+
+    private void GenerateYamlFromObjects()
+    {
+        var templatesDict = new Dictionary<string, List<YamlTag>>();
+
+        foreach (var t in _templates)
+        {
+            var yamlTags = t.Tags.Select(tag => new YamlTag
+                {
+                    Name = tag.Name,
+                    Required = tag.Required,
+                    AssetType = string.IsNullOrWhiteSpace(tag.AssetType) ? null : tag.AssetType,
+                    Overwrite = tag.Overwrite ? true : null,
+                    WriteTag = tag.WriteTag,
+                    ReadTag = tag.ReadTag,
+                    Source = new YamlSource { Type = "Variable", ValueKey = tag.SourceValueKey }
+                }).ToList();
+
+            templatesDict[t.Name] = yamlTags;
+        }
+
+        var root = new Dictionary<string, Dictionary<string, List<YamlTag>>> { { "Templates", templatesDict } };
+        var serializer = new SerializerBuilder().ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull).Build();
+        _content = serializer.Serialize(root);
+    }
+
+    // --- UTILIDADES UI ---
+    private Color GetAssetColor(string? assetType)
+    {
+        return assetType switch
+        {
+            "Photo" => Color.Tertiary,
+            "Video" => Color.Warning,
+            _ => Color.Dark
+        };
+    }
+
+    // --- GUARDADO ---
+    private async Task AutoSave()
+    {
+        if (!_isRawMode) GenerateYamlFromObjects();
+        try
+        {
+            await FileSystem.File.WriteAllTextAsync(_filePath, _content);
+            Snackbar.Add("Plantillas guardadas", Severity.Success, config => { config.VisibleStateDuration = 1000; });
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al auto-guardar: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveFile()
+    {
+        try
+        {
+            await FileSystem.File.WriteAllTextAsync(_filePath, _content);
+            Snackbar.Add("¡YAML guardado correctamente!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al guardar: {ex.Message}", Severity.Error);
+        }
+    }
+}

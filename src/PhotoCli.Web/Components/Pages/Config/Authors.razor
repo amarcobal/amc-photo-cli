@@ -1,0 +1,362 @@
+@page "/config/authors"
+@rendermode InteractiveServer
+@using System.IO.Abstractions
+@using Microsoft.Extensions.Configuration
+@using System.IO
+@using YamlDotNet.Serialization
+@using PhotoCli.Core.Models
+@inject IFileSystem FileSystem
+@inject ISnackbar Snackbar
+@inject IConfiguration Configuration
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudGrid>
+        <MudItem xs="8">
+            <MudText Typo="Typo.h4" GutterBottom="true" Color="Color.Primary">
+                <MudIcon Icon="@Icons.Material.Filled.People" Class="mr-2" />
+                Autores
+            </MudText>
+            <MudText Typo="Typo.subtitle1">
+                Configura los autores y alias que se inyectarán en los metadatos.
+            </MudText>
+        </MudItem>
+        <MudItem xs="4" Class="d-flex justify-end align-center">
+            <MudSwitch T="bool" Value="@_isRawMode" ValueChanged="OnModeChanged" Label="Modo Código (YAML)" Color="Color.Secondary" Size="Size.Large" />
+        </MudItem>
+    </MudGrid>
+
+    @if (_isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Class="mt-6" />
+    }
+    else
+    {
+        <MudCard Elevation="3" Class="mt-4">
+            <MudCardContent>
+                @if (_isRawMode)
+                {
+                    <MudTextField @bind-Value="_content"
+                                  Variant="Variant.Outlined"
+                                  Lines="20"
+                                  Style="font-family: monospace; font-size: 0.9rem; background-color: #1e1e1e; color: #d4d4d4; padding: 12px;" />
+                }
+                else
+                {
+                    <MudTable Items="@_authors" Dense="true" Hover="true" Elevation="0"
+                              CanCancelEdit="true"
+                              EditTrigger="TableEditTrigger.EditButton"
+                              RowEditPreview="BackupItem"
+                              RowEditCancel="ResetItemToOriginalValues"
+                              RowEditCommit="ItemHasBeenCommitted">
+                        <ToolBarContent>
+                            <MudText Typo="Typo.h6">Lista de Autores</MudText>
+                            <MudSpacer />
+                            <MudButton Color="Color.Success" StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Filled" OnClick="AddAuthor">
+                                Nuevo Autor
+                            </MudButton>
+                        </ToolBarContent>
+
+                        <HeaderContent>
+                            <MudTh><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>Disp.</b></MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>ID</b></MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>Nombre (Name)</b></MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>Alias</b></MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>Total Disp.</b></MudText></MudTh>
+                            <MudTh Style="text-align:right"><MudText Typo="Typo.subtitle2" Color="Color.Primary"><b>Acciones</b></MudText></MudTh>
+                        </HeaderContent>
+
+                        <RowTemplate>
+                            <MudTd>
+                                <MudIconButton Icon="@(context.ShowDetails ? Icons.Material.Filled.KeyboardArrowUp : Icons.Material.Filled.KeyboardArrowDown)"
+                                               Color="Color.Info" Size="Size.Small"
+                                               OnClick="@(() => context.ShowDetails = !context.ShowDetails)" />
+                            </MudTd>
+                            <MudTd DataLabel="ID"><b>@context.ID</b></MudTd>
+                            <MudTd DataLabel="Nombre">@context.Name</MudTd>
+                            <MudTd DataLabel="Alias">@context.Alias</MudTd>
+                            <MudTd DataLabel="Total Disp.">
+                                <MudChip T="string" Size="Size.Small" Color="@(context.Devices.Any() ? Color.Info : Color.Default)">
+                                    @(context.Devices?.Count ?? 0)
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Acciones" Style="text-align:right">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(async () => await DeleteAuthor(context))" />
+                            </MudTd>
+                        </RowTemplate>
+
+                        <RowEditingTemplate>
+                            <MudTd></MudTd>
+                            <MudTd DataLabel="ID">
+                                <MudTextField @bind-Value="context.ID" Required="true" RequiredError="Obligatorio" />
+                            </MudTd>
+                            <MudTd DataLabel="Nombre">
+                                <MudTextField @bind-Value="context.Name" Required="true" RequiredError="Obligatorio" />
+                            </MudTd>
+                            <MudTd DataLabel="Alias">
+                                <MudTextField @bind-Value="context.Alias" Required="true" RequiredError="Obligatorio" />
+                            </MudTd>
+                            <MudTd DataLabel="Total Disp.">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Despliega fila</MudText>
+                            </MudTd>
+                            <MudTd></MudTd>
+                        </RowEditingTemplate>
+
+                        <ChildRowContent>
+                            @if (context.ShowDetails)
+                            {
+                                <MudTr>
+                                    <td colspan="6" style="padding: 16px; background-color: #2a2a2a; border-left: 4px solid #3f51b5;">
+                                        <MudText Typo="Typo.subtitle2" Class="mb-2">Dispositivos de <b>@context.Name</b></MudText>
+
+                                        @if (context.Devices != null && context.Devices.Any())
+                                        {
+                                            <MudSimpleTable Dense="true" Style="background: transparent;">
+                                                <thead>
+                                                    <tr>
+                                                        <th>ID Dispositivo</th>
+                                                        <th>Desde (From)</th>
+                                                        <th>Hasta (To)</th>
+                                                        <th></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var dev in context.Devices)
+                                                    {
+                                                        <tr>
+                                                            @* CORRECCIÓN: Llamamos a AutoSave de forma asíncrona segura *@
+                                                            <td><MudTextField @bind-Value="dev.ID" Margin="Margin.Dense" OnBlur="@(async () => await AutoSave())" /></td>
+                                                            <td><MudTextField @bind-Value="dev.From" Margin="Margin.Dense" Placeholder="YYYY-MM-DD" OnBlur="@(async () => await AutoSave())" /></td>
+                                                            <td><MudTextField @bind-Value="dev.To" Margin="Margin.Dense" Placeholder="YYYY-MM-DD" OnBlur="@(async () => await AutoSave())" /></td>
+                                                            <td style="text-align:right">
+                                                                <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" Size="Size.Small" OnClick="@(async () => { context.Devices.Remove(dev); await AutoSave(); })" />
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </MudSimpleTable>
+                                        }
+                                        <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Color="Color.Info" Class="mt-2" OnClick="@(() => { context.Devices ??= new(); context.Devices.Add(new AuthorDeviceViewModel { ID = "" }); StateHasChanged(); })">
+                                            Añadir Dispositivo
+                                        </MudButton>
+                                    </td>
+                                </MudTr>
+                            }
+                        </ChildRowContent>
+                    </MudTable>
+                }
+            </MudCardContent>
+
+            @if (_isRawMode)
+            {
+                <MudCardActions Class="pb-4 pl-4" Style="background-color: rgba(63, 81, 181, 0.1);">
+                    <MudButton StartIcon="@Icons.Material.Filled.Save"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Size="Size.Large"
+                               OnClick="SaveFile">
+                        Guardar YAML
+                    </MudButton>
+                </MudCardActions>
+            }
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    // ---------------------------------------------------------
+    // VIEW MODELS: Envoltorios mutables para los Records del Core
+    // ---------------------------------------------------------
+    public class AuthorDeviceViewModel
+    {
+        public string ID { get; set; } = string.Empty;
+        public DateTime? From { get; set; } // <-- Cambiado de string? a DateTime?
+        public DateTime? To { get; set; }   // <-- Cambiado de string? a DateTime?
+    }
+
+    public class AuthorViewModel
+    {
+        public string ID { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Alias { get; set; } = string.Empty;
+
+        // CORRECCIÓN: Ahora usa el ViewModel en lugar del inmutable
+        public List<AuthorDeviceViewModel> Devices { get; set; } = new();
+
+        public bool ShowDetails { get; set; } = false;
+        public bool IsNew { get; set; } = false;
+    }
+
+    private bool _isLoading = true;
+    private string _filePath = "";
+    private string _content = string.Empty;
+    private List<AuthorViewModel> _authors = new();
+    private bool _isRawMode = false;
+
+    private AuthorViewModel? _elementBeforeEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Snackbar.Configuration.PositionClass = Defaults.Classes.Position.BottomRight;
+        var configFolder = Configuration.GetValue<string>("ConfigFolder") ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config");
+        _filePath = Path.Combine(configFolder, "Authors.yaml");
+
+        await LoadFile();
+        _isLoading = false;
+    }
+
+    private async Task LoadFile()
+    {
+        try
+        {
+            if (FileSystem.File.Exists(_filePath))
+                _content = await FileSystem.File.ReadAllTextAsync(_filePath);
+            else
+                _content = "Authors:\n  - ID: Unknown\n    Name: Unknown\n    Alias: UNK\n    Devices: []";
+
+            ParseYamlToObjects();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OnModeChanged(bool isRaw)
+    {
+        if (isRaw) GenerateYamlFromObjects();
+        else ParseYamlToObjects();
+
+        _isRawMode = isRaw;
+    }
+
+    // --- CICLO DE VIDA EDICIÓN ---
+    private void BackupItem(object element)
+    {
+        var author = (AuthorViewModel)element;
+        _elementBeforeEdit = new AuthorViewModel
+            {
+                ID = author.ID,
+                Name = author.Name,
+                Alias = author.Alias,
+                IsNew = author.IsNew
+            };
+    }
+
+    private void ResetItemToOriginalValues(object element)
+    {
+        var author = (AuthorViewModel)element;
+
+        if (author.IsNew)
+            _authors.Remove(author);
+        else if (_elementBeforeEdit != null)
+        {
+            author.ID = _elementBeforeEdit.ID;
+            author.Name = _elementBeforeEdit.Name;
+            author.Alias = _elementBeforeEdit.Alias;
+        }
+        StateHasChanged();
+    }
+
+    private void ItemHasBeenCommitted(object element)
+    {
+        var author = (AuthorViewModel)element;
+        author.IsNew = false;
+        _ = AutoSave();
+    }
+
+    private void AddAuthor()
+    {
+        var newAuthor = new AuthorViewModel { ID = "", Name = "", Alias = "", IsNew = true };
+        _authors.Insert(0, newAuthor);
+        StateHasChanged();
+        Snackbar.Add("Haz clic en el icono del lápiz del nuevo registro para rellenarlo.", Severity.Info);
+    }
+
+    private async Task DeleteAuthor(AuthorViewModel author)
+    {
+        _authors.Remove(author);
+        _authors = _authors.ToList();
+        await AutoSave();
+    }
+
+    // --- YAMLDOTNET ---
+    private void ParseYamlToObjects()
+    {
+        try
+        {
+            var deserializer = new DeserializerBuilder().IgnoreUnmatchedProperties().Build();
+            var root = deserializer.Deserialize<Dictionary<string, List<Author>>>(_content);
+            if (root != null && root.ContainsKey("Authors") && root["Authors"] != null)
+            {
+                // Mapeamos Author y AuthorDevice a sus ViewModels
+                _authors = root["Authors"].Select(a => new AuthorViewModel
+                    {
+                        ID = a.ID,
+                        Name = a.Name,
+                        Alias = a.Alias,
+                        Devices = a.Devices?.Select(d => new AuthorDeviceViewModel
+                        {
+                            ID = d.ID,
+                            From = d.From,
+                            To = d.To
+                        }).ToList() ?? new List<AuthorDeviceViewModel>()
+                    }).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error de sintaxis YAML: {ex.Message}", Severity.Warning);
+            _isRawMode = true;
+        }
+    }
+
+    private void GenerateYamlFromObjects()
+    {
+        // Revertimos de ViewModel a Record para serializar
+        var coreAuthors = _authors.Select(v => new Author
+            {
+                ID = v.ID,
+                Name = v.Name,
+                Alias = v.Alias,
+                Devices = v.Devices.Select(d => new AuthorDevice
+                {
+                    ID = d.ID,
+                    From = d.From,
+                    To = d.To
+                }).ToList()
+            }).ToList();
+
+        var root = new Dictionary<string, List<Author>> { { "Authors", coreAuthors } };
+        var serializer = new SerializerBuilder().ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull).Build();
+        _content = serializer.Serialize(root);
+    }
+
+    // --- GUARDADO ---
+    private async Task AutoSave()
+    {
+        if (!_isRawMode) GenerateYamlFromObjects();
+        try
+        {
+            await FileSystem.File.WriteAllTextAsync(_filePath, _content);
+            Snackbar.Add("Guardado automático", Severity.Success, config => { config.VisibleStateDuration = 1500; });
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al auto-guardar: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SaveFile()
+    {
+        try
+        {
+            await FileSystem.File.WriteAllTextAsync(_filePath, _content);
+            Snackbar.Add("¡YAML guardado correctamente!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al guardar: {ex.Message}", Severity.Error);
+        }
+    }
+}
